@@ -73,7 +73,7 @@
   }
   .theme-toggle{
     position:absolute;
-    top:70px; right:20px;
+    top:72px; right:20px;
     background:var(--panel-2);
     border:1px solid var(--line);
     color:var(--paper);
@@ -328,6 +328,11 @@
   }
   .saved-start-row:last-child{border-bottom:none;}
   .saved-start-row .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #advanced-panel .card{
+    margin-bottom:14px;
+    padding:16px;
+  }
+  #advanced-panel .divider-label{margin-top:18px;}
 
 </style>
 <script>
@@ -360,25 +365,11 @@
 
   <div id="refresh-banner" class="banner" style="display:none;">
     <span id="refresh-banner-text"></span>
-    <button class="btn-secondary" onclick="document.getElementById('paste-card').scrollIntoView({behavior:'smooth'}); focusPasteBox();">Refresh now</button>
-  </div>
-
-  <div class="card" id="paste-card">
-    <h2><span class="eyebrow">01</span> Import places</h2>
-    <label class="field-label">Paste your Google Takeout export (JSON or KML text), or a plain list of "Name, lat, lng" lines.</label>
-    <textarea id="paste-box" rows="5" placeholder="Paste Takeout content here..."></textarea>
-    <div class="row" style="margin-top:10px;">
-      <button class="btn-primary" onclick="importFromPaste()">Merge into my list</button>
-      <label class="btn-secondary" style="display:inline-flex;align-items:center;cursor:pointer;">
-        Upload file
-        <input type="file" id="file-input" accept=".json,.kml,.txt" style="display:none;" onchange="importFromFile(event)">
-      </label>
-    </div>
-    <div id="import-status" style="font-size:12.5px;color:var(--teal);margin-top:8px;"></div>
+    <button class="btn-secondary" onclick="openImportInAdvanced();">Refresh now</button>
   </div>
 
   <div class="card">
-    <h2><span class="eyebrow">02</span> Add places by name/address</h2>
+    <h2><span class="eyebrow">01</span> Add places by name/address</h2>
     <label class="field-label">Paste one place per line — name, address, or both. Good for lists you can't export (e.g. shared/collaborative lists). Each line gets geocoded automatically.</label>
     <textarea id="bulk-geocode-box" rows="5" placeholder="Lee's Sandwiches"></textarea>
     <button class="btn-primary" style="margin-top:10px;" onclick="bulkGeocode()">Look up & add</button>
@@ -386,14 +377,14 @@
   </div>
 
   <div class="card">
-    <h2><span class="eyebrow">03</span> Add a place manually</h2>
+    <h2><span class="eyebrow">02</span> Add a place manually</h2>
     <label class="field-label">Search for a place</label>
     <input type="text" id="place-search" placeholder="Start typing an address or place name...">
     <div id="search-results" class="search-results"></div>
   </div>
 
   <div class="card">
-    <h2><span class="eyebrow">04</span> Your places <span class="counter" id="place-count"></span></h2>
+    <h2><span class="eyebrow">03</span> Your places <span class="counter" id="place-count"></span></h2>
     <input type="text" id="place-filter" placeholder="Search your places..." oninput="renderPlaceList()" style="margin-bottom:10px;">
     <div class="row" style="margin-bottom:10px;">
       <button class="btn-secondary" onclick="setAllChecked(true)">Select all</button>
@@ -405,7 +396,7 @@
   </div>
 
   <div class="card">
-    <h2><span class="eyebrow">05</span> Starting point</h2>
+    <h2><span class="eyebrow">04</span> Starting point</h2>
     <div class="row">
       <button class="btn-secondary" onclick="useCurrentLocation()">Use my current location</button>
     </div>
@@ -428,7 +419,7 @@
   <button class="btn-primary btn-block" style="padding:15px;font-size:15.5px;" onclick="buildRoute()">Get optimized route</button>
 
   <div class="card" id="route-output">
-    <h2><span class="eyebrow">06</span> Review & adjust order</h2>
+    <h2><span class="eyebrow">05</span> Review & adjust order</h2>
     <div id="pin-note-area"></div>
     <div id="editable-order"></div>
     <div class="row" style="margin-top:12px;">
@@ -458,6 +449,22 @@
       </div>
     </div>
     <div id="advanced-panel" style="display:none;margin-top:10px;">
+
+      <div class="card" id="paste-card">
+        <h2><span class="eyebrow">Import</span> Import places</h2>
+        <label class="field-label">Paste your Google Takeout export (JSON or KML text), or a plain list of "Name, lat, lng" lines.</label>
+        <textarea id="paste-box" rows="5" placeholder="Paste Takeout content here..."></textarea>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn-primary" onclick="importFromPaste()">Merge into my list</button>
+          <label class="btn-secondary" style="display:inline-flex;align-items:center;cursor:pointer;">
+            Upload file
+            <input type="file" id="file-input" accept=".json,.kml,.txt" style="display:none;" onchange="importFromFile(event)">
+          </label>
+        </div>
+        <div id="import-status" style="font-size:12.5px;color:var(--teal);margin-top:8px;"></div>
+      </div>
+
+      <div class="divider-label">API key</div>
       <label class="field-label">Google Places API key — saved in this browser so you don't have to re-enter it. Google Places keys are normally locked to your site/app anyway, but you can clear it below if this is a shared computer.</label>
       <input type="text" id="api-key" placeholder="AIza..." autocomplete="off" oninput="onApiKeyInput(this.value)">
       <button class="btn-secondary" style="margin-top:8px;" onclick="clearApiKey()">Clear saved key</button>
@@ -668,6 +675,14 @@ function importFromFile(evt){
 
 function focusPasteBox(){ document.getElementById('paste-box').focus(); }
 
+// Opens the Advanced panel (where Import places now lives) and scrolls/focuses the paste box.
+// Used by the "Refresh now" banner button, since the import card is no longer in the main flow.
+function openImportInAdvanced(){
+  document.getElementById('advanced-panel').style.display = 'block';
+  document.getElementById('paste-card').scrollIntoView({behavior:'smooth'});
+  focusPasteBox();
+}
+
 /* ---------- Refresh reminder ---------- */
 function checkRefreshBanner(){
   const last = appState.lastImportAt;
@@ -726,7 +741,7 @@ function renderPlaceList(){
 
   const list = document.getElementById('place-list');
   if(places.length===0){
-    list.innerHTML = '<div class="empty">No places yet — import from Takeout above or add one manually.</div>';
+    list.innerHTML = '<div class="empty">No places yet — add one above, or import from Takeout under Advanced.</div>';
     return;
   }
   if(filtered.length===0){
@@ -784,32 +799,16 @@ function applySessionPins(){
 // callers handle that, so regeocodeAll can batch without a save+render per item.
 async function regeocodeOne(key, p){
   const query = p.address || p.name;
-  try{
-    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Goog-Api-Key': key,
-        'X-Goog-FieldMask':'places.displayName,places.formattedAddress,places.location'
-      },
-      body: JSON.stringify({textQuery: query, ...locationBiasPayload()})
-    });
-    const data = await res.json();
-    if(!res.ok || !data.places || !data.places[0]){
-      return {error: data.error?.message || 'no match found'};
-    }
-    const pl = data.places[0];
-    const oldCoords = `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
-    p.name = pl.displayName.text;
-    p.address = pl.formattedAddress || p.address;
-    p.lat = pl.location.latitude;
-    p.lng = pl.location.longitude;
-    p.src = 're-checked';
-    const newCoords = `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
-    return {changed: oldCoords !== newCoords};
-  }catch(e){
-    return {error: e.message};
-  }
+  const {result, error} = await lookupPlace(key, query);
+  if(error) return {error};
+  const oldCoords = `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
+  p.name = result.name;
+  p.address = result.address || p.address;
+  p.lat = result.lat;
+  p.lng = result.lng;
+  p.src = 're-checked';
+  const newCoords = `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
+  return {changed: oldCoords !== newCoords};
 }
 
 async function regeocodePlace(id){
@@ -916,6 +915,63 @@ function locationBiasPayload(){
   return {locationBias: {circle: {center: {latitude: bias.lat, longitude: bias.lng}, radius: 50000}}};
 }
 
+/* ---------- Address vs. business lookups ----------
+   Places Text Search is built to find businesses/POIs — for a query that's just a street
+   address, it can match whichever business Google has registered at or near that address
+   instead of the literal address point. Google's separate Geocoding API resolves the literal
+   address, but that endpoint doesn't support CORS for browser JS (server-side only) — calling
+   it from here fails 100% of the time regardless of key setup. Instead, we stay on the
+   CORS-friendly Places API and use its `includedType: street_address` filter to force a
+   literal-address match. */
+function looksLikeAddress(query){
+  return /^\d+\s/.test(query.trim());
+}
+
+function isSameLocation(a, b){
+  return Math.abs(a.lat-b.lat)<0.0002 && Math.abs(a.lng-b.lng)<0.0002; // ~20m
+}
+
+async function placesTextSearchLookup(key, query, opts={}){
+  const body = {textQuery: query, ...locationBiasPayload()};
+  if(opts.includedType){ body.includedType = opts.includedType; body.strictTypeFiltering = true; }
+  const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'X-Goog-Api-Key': key,
+      'X-Goog-FieldMask':'places.displayName,places.formattedAddress,places.location'
+    },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if(!res.ok) return {error: data.error?.message || `HTTP ${res.status}`};
+  const places = (data.places||[]).map(pl=>({
+    name: pl.displayName.text, address: pl.formattedAddress||null,
+    lat: pl.location.latitude, lng: pl.location.longitude,
+    src: opts.includedType ? 'geocoded-address' : 'search'
+  }));
+  return {places};
+}
+
+// Single best-guess match for one query — used by bulk geocode and re-check, where there's
+// no dropdown to pick from. For address-shaped queries, a strict street_address match wins
+// over whatever business match a plain Places Text Search would otherwise auto-pick.
+async function lookupPlace(key, query){
+  try{
+    if(looksLikeAddress(query)){
+      const addr = await placesTextSearchLookup(key, query, {includedType:'street_address'});
+      if(addr.places && addr.places[0]) return {result: addr.places[0]};
+      // no strict address match (or the lookup errored) — fall through to a normal search
+    }
+    const {places, error} = await placesTextSearchLookup(key, query);
+    if(error) return {error};
+    if(places && places[0]) return {result: places[0]};
+    return {error: 'no match found'};
+  }catch(e){
+    return {error: e.message};
+  }
+}
+
 /* ---------- Places Autocomplete (manual add + start search) ---------- */
 let autocompleteTimer;
 function wirePlaceSearch(inputId, resultsId, onSelect){
@@ -936,47 +992,53 @@ async function runTextSearch(query, resultsDiv, onSelect){
     return;
   }
   resultsDiv.innerHTML = '<div class="search-result" style="cursor:default;">Searching…</div>';
-  try{
-    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Goog-Api-Key': key,
-        'X-Goog-FieldMask':'places.displayName,places.formattedAddress,places.location'
-      },
-      body: JSON.stringify({textQuery: query, ...locationBiasPayload()})
-    });
-    const data = await res.json();
 
-    if(!res.ok){
-      const msg = data.error?.message || `HTTP ${res.status}`;
-      resultsDiv.innerHTML = `<div class="search-result" style="color:var(--danger);cursor:default;">Google API error: ${escapeHtml(msg)}</div>`;
-      console.error('Places API error:', data);
-      return;
+  const results = [];
+  const addressLike = looksLikeAddress(query);
+
+  // Address-shaped query: put the strict street_address match first, ahead of any business
+  // match, so a full street address doesn't silently resolve to whichever tenant Google
+  // has registered there.
+  if(addressLike){
+    try{
+      const {places} = await placesTextSearchLookup(key, query, {includedType:'street_address'});
+      if(places) results.push(...places);
+    }catch(e){
+      console.error('Address-type search failed:', e);
     }
-    if(!data.places || data.places.length===0){
-      resultsDiv.innerHTML = '<div class="search-result" style="cursor:default;">No results for that search.</div>';
-      return;
-    }
-    resultsDiv.innerHTML = data.places.slice(0,5).map((pl,i)=>`
-      <div class="search-result" onclick='selectSearchResult(${i})'>${escapeHtml(pl.displayName.text)}<br><span style="color:var(--paper-dim);font-size:11.5px;">${escapeHtml(pl.formattedAddress||'')}</span></div>
-    `).join('');
-    window.__lastSearchResults = data.places;
-    window.__lastSearchCallback = onSelect;
-  }catch(e){
-    resultsDiv.innerHTML = `<div class="search-result" style="color:var(--danger);cursor:default;">Request failed: ${escapeHtml(e.message)}. This is often a CORS/referrer restriction issue — check the key restrictions match the exact URL you're testing from.</div>`;
-    console.error('Places search fetch failed:', e);
   }
+
+  let placesError = null;
+  try{
+    const {places, error} = await placesTextSearchLookup(key, query);
+    if(error) placesError = error;
+    else if(places){
+      // skip business results that sit on the same spot as an address result we already have
+      places.slice(0,5).forEach(p=>{
+        if(!results.some(r=>isSameLocation(r,p))) results.push(p);
+      });
+    }
+  }catch(e){
+    placesError = e.message;
+  }
+
+  if(results.length===0){
+    resultsDiv.innerHTML = placesError
+      ? `<div class="search-result" style="color:var(--danger);cursor:default;">Google API error: ${escapeHtml(placesError)}</div>`
+      : '<div class="search-result" style="cursor:default;">No results for that search.</div>';
+    return;
+  }
+
+  resultsDiv.innerHTML = results.map((r,i)=>`
+    <div class="search-result" onclick='selectSearchResult(${i})'>${escapeHtml(r.name)}${r.src==='geocoded-address' ? ' <span style="color:var(--teal);font-size:10.5px;text-transform:uppercase;">exact address</span>' : ''}${r.address ? `<br><span style="color:var(--paper-dim);font-size:11.5px;">${escapeHtml(r.address)}</span>` : ''}</div>
+  `).join('');
+  window.__lastSearchResults = results;
+  window.__lastSearchCallback = onSelect;
 }
 
 function selectSearchResult(i){
-  const pl = window.__lastSearchResults[i];
-  window.__lastSearchCallback({
-    name: pl.displayName.text,
-    address: pl.formattedAddress || null,
-    lat: pl.location.latitude,
-    lng: pl.location.longitude
-  });
+  const r = window.__lastSearchResults[i];
+  window.__lastSearchCallback({name: r.name, address: r.address, lat: r.lat, lng: r.lng});
 }
 
 wirePlaceSearch('place-search','search-results', (place)=>{
@@ -1007,28 +1069,12 @@ async function bulkGeocode(){
   const failed = [];
   for(let i=0;i<lines.length;i++){
     const query = lines[i];
-    try{
-      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
-        method:'POST',
-        headers:{
-          'Content-Type':'application/json',
-          'X-Goog-Api-Key': key,
-          'X-Goog-FieldMask':'places.displayName,places.formattedAddress,places.location'
-        },
-        body: JSON.stringify({textQuery: query, ...locationBiasPayload()})
-      });
-      const data = await res.json();
-      if(!res.ok){
-        console.error('Geocode error for', query, data);
-        failed.push(`${query} (${data.error?.message || 'HTTP '+res.status})`);
-      } else if(data.places && data.places[0]){
-        const pl = data.places[0];
-        found.push({name: pl.displayName.text, address: pl.formattedAddress || null, lat: pl.location.latitude, lng: pl.location.longitude, src:'geocoded'});
-      } else {
-        failed.push(query);
-      }
-    }catch(e){
-      failed.push(query);
+    const {result, error} = await lookupPlace(key, query);
+    if(error){
+      console.error('Geocode error for', query, error);
+      failed.push(`${query} (${error})`);
+    } else {
+      found.push(result);
     }
     status.textContent = `Looking up ${lines.length} places… (${i+1}/${lines.length})`;
     await new Promise(r=>setTimeout(r, 150)); // gentle pacing between requests
@@ -1239,7 +1285,7 @@ function computeOrder(){
     }
     order = finalOrder.filter(Boolean);
     const hadTies = pinnedSorted.some((p,idx)=> idx>0 && p.pinOrder===pinnedSorted[idx-1].pinOrder);
-    pinNote = `<div class="pin-note">${pinned.length} stop(s) locked to their exact position — the rest thread in around them by proximity.${hadTies ? ' Some pins shared the same slot number, so ties were broken by picking whichever was closer to the previous stop.' : ''} Adjust freely below before confirming.</div>`;
+    pinNote = `<div class="pin-note">${pinned.length} stop(s) locked to their exact position.${hadTies ? ' Some pins shared the same slot number, so ties were broken by picking whichever was closer to the previous stop.' : ''} Adjust freely below before confirming.</div>`;
   } else {
     order = nearestNeighborOrder(startLocation, allChecked);
     if(order.length<=12) order = twoOpt(startLocation, order);
@@ -1291,7 +1337,7 @@ function renderEditableOrder(){
   const stopRows = pendingOrder.map((s,i)=>`
     <div class="stop-row">
       <span class="n">${i+1}</span>
-      <span class="name">${escapeHtml(s.name)}${s.pinOrder!=null?' <span class="pin-flag">📌</span>':''}</span>
+      <span class="name">${escapeHtml(s.name)}${s.address ? ` <span style="color:var(--paper-dim);font-weight:400;">(${escapeHtml(s.address)})</span>` : ''}${s.pinOrder!=null?' <span class="pin-flag">📌</span>':''}</span>
       <button class="mini-btn" onclick="movePendingStop(${i},-1)" ${i===0?'disabled':''} title="Move earlier">↑</button>
       <button class="mini-btn" onclick="movePendingStop(${i},1)" ${i===pendingOrder.length-1?'disabled':''} title="Move later">↓</button>
       <button class="mini-btn rm-mini" onclick="removePendingStop(${i})" title="Drop this stop">✕</button>
