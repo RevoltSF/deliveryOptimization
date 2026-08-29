@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waypoint — Route Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12161d;
+    --panel:#1a2029;
+    --panel-2:#212938;
+    --line:#2b3242;
+    --paper:#e9e6dd;
+    --paper-dim:#a4a9b5;
+    --amber:#e5a13c;
+    --teal:#4d9089;
+    --danger:#c96a5a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--paper);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding-bottom:80px;
+  }
+  header{
+    padding:28px 20px 20px;
+    border-bottom:1px solid var(--line);
+    position:relative;
+    overflow:hidden;
+  }
+  header h1{
+    font-family:'Fraunces',serif;
+    font-optical-sizing:auto;
+    font-weight:700;
+    font-size:clamp(28px,7vw,38px);
+    margin:0 0 4px;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    margin:0;
+    color:var(--paper-dim);
+    font-size:14px;
+  }
+  .route-signature{
+    position:absolute;
+    top:0; right:-10px;
+    width:140px; height:100%;
+    opacity:0.5;
+    pointer-events:none;
+  }
+  main{
+    max-width:640px;
+    margin:0 auto;
+    padding:20px;
+  }
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:18px;
+    margin-bottom:16px;
+  }
+  .card h2{
+    font-family:'Fraunces',serif;
+    font-size:16px;
+    font-weight:600;
+    margin:0 0 12px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--amber);
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+  }
+  button{
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    font-weight:500;
+    border:none;
+    border-radius:7px;
+    padding:11px 16px;
+    cursor:pointer;
+    transition:transform .08s ease, opacity .15s ease;
+  }
+  button:active{transform:scale(0.97);}
+  .btn-primary{background:var(--amber);color:#1a1206;}
+  .btn-secondary{background:var(--panel-2);color:var(--paper);border:1px solid var(--line);}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}
+  .btn-block{width:100%;}
+  .row{display:flex;gap:8px;flex-wrap:wrap;}
+  textarea, input[type=text]{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    border-radius:7px;
+    padding:10px 12px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    resize:vertical;
+  }
+  input[type=text]{font-family:'Inter',sans-serif;font-size:14px;}
+  label.field-label{
+    display:block;
+    font-size:12px;
+    color:var(--paper-dim);
+    margin-bottom:6px;
+  }
+  .banner{
+    background:#2c2410;
+    border:1px solid #5c451c;
+    color:#e5c07a;
+    border-radius:8px;
+    padding:12px 14px;
+    font-size:13px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .banner button{padding:7px 12px;font-size:12.5px;}
+  .place-list{max-height:320px;overflow-y:auto;}
+  .place{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 4px;
+    border-bottom:1px solid var(--line);
+  }
+  .place:last-child{border-bottom:none;}
+  .place input[type=checkbox]{
+    width:18px;height:18px;
+    accent-color:var(--amber);
+    flex-shrink:0;
+  }
+  .place input.pin-order{
+    width:45px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--amber);
+    border-radius:5px;
+    padding:5px 4px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    text-align:center;
+    flex-shrink:0;
+  }
+  .place .name{font-size:14px;flex:1;}
+  .place .src{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    color:var(--paper-dim);
+    text-transform:uppercase;
+  }
+  .place button.rm{
+    background:none;border:none;color:var(--paper-dim);
+    font-size:16px;padding:2px 6px;cursor:pointer;
+  }
+  .empty{
+    color:var(--paper-dim);
+    font-size:13px;
+    text-align:center;
+    padding:20px 0;
+  }
+  .counter{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    color:var(--paper-dim);
+  }
+  .search-results{margin-top:8px;}
+  .search-result{
+    padding:9px 10px;
+    background:var(--panel-2);
+    border-radius:6px;
+    margin-bottom:6px;
+    font-size:13.5px;
+    cursor:pointer;
+    border:1px solid var(--line);
+  }
+  .search-result:hover{border-color:var(--amber);}
+  .divider-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    color:var(--paper-dim);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    margin:14px 0 8px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .divider-label::after{
+    content:'';flex:1;height:1px;background:var(--line);
+  }
+  #route-output{display:none;}
+  #route-output.show{display:block;}
+  .pin-note{font-size:12px;color:var(--paper-dim);margin-bottom:8px;}
+  .stop-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 2px;
+    border-bottom:1px solid var(--line);
+  }
+  .stop-row:last-child{border-bottom:none;}
+  .stop-row.start-row{color:var(--paper-dim);}
+  .stop-row .n{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    color:var(--amber);
+    width:20px;
+    flex-shrink:0;
+  }
+  .stop-row .name{
+    flex:1;
+    font-size:14px;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .stop-row .pin-flag{color:var(--amber);}
+  .stop-row .mini-btn{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    border-radius:5px;
+    width:28px;
+    height:28px;
+    font-size:13px;
+    line-height:1;
+    padding:0;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .stop-row .mini-btn:disabled{opacity:0.25;cursor:default;}
+  .stop-row .mini-btn.rm-mini{color:var(--danger);}
+  a.maps-link{
+    display:block;
+    text-align:center;
+    background:var(--amber);
+    color:#1a1206;
+    text-decoration:none;
+    font-weight:600;
+    padding:14px;
+    border-radius:8px;
+    margin-top:10px;
+  }
+  select{
+    background:var(--panel-2);
+    color:var(--paper);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:9px 10px;
+    font-family:'Inter',sans-serif;
+    font-size:13.5px;
+  }
+  .settings-toggle{
+    font-size:12px;
+    color:var(--paper-dim);
+    text-decoration:underline;
+    cursor:pointer;
+    background:none;
+    border:none;
+    padding:0;
+  }
+  .confirmed-badge{
+    font-size:12.5px;
+    color:var(--teal);
+    margin-top:10px;
+    display:none;
+  }
+  .confirmed-badge.show{display:block;}
+  .saved-start-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 2px;
+    border-bottom:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .saved-start-row:last-child{border-bottom:none;}
+  .saved-start-row .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="route-signature" viewBox="0 0 140 120" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10,100 C 40,90 30,50 60,45 S 90,20 130,15" stroke="#e5a13c" stroke-width="2" fill="none" stroke-dasharray="1 7" stroke-linecap="round"/>
+    <circle cx="10" cy="100" r="3" fill="#e5a13c"/>
+    <circle cx="60" cy="45" r="3" fill="#4d9089"/>
+    <circle cx="130" cy="15" r="3" fill="#e5a13c"/>
+  </svg>
+  <h1>Waypoint</h1>
+  <p>Pick your stops, get the optimal driving order, open it in Google Maps.</p>
+</header>
+
+<main>
+
+  <div id="refresh-banner" class="banner" style="display:none;">
+    <span id="refresh-banner-text"></span>
+    <button class="btn-secondary" onclick="document.getElementById('paste-card').scrollIntoView({behavior:'smooth'}); focusPasteBox();">Refresh now</button>
+  </div>
+
+  <div class="card" id="paste-card">
+    <h2><span class="eyebrow">01</span> Import places</h2>
+    <label class="field-label">Paste your Google Takeout export (JSON or KML text), or a plain list of "Name, lat, lng" lines.</label>
+    <textarea id="paste-box" rows="5" placeholder="Paste Takeout content here..."></textarea>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn-primary" onclick="importFromPaste()">Merge into my list</button>
+      <label class="btn-secondary" style="display:inline-flex;align-items:center;cursor:pointer;">
+        Upload file
+        <input type="file" id="file-input" accept=".json,.kml,.txt" style="display:none;" onchange="importFromFile(event)">
+      </label>
+    </div>
+    <div id="import-status" style="font-size:12.5px;color:var(--teal);margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="eyebrow">02</span> Add places by name/address</h2>
+    <label class="field-label">Paste one place per line — name, address, or both. Good for lists you can't export (e.g. shared/collaborative lists). Each line gets geocoded automatically.</label>
+    <textarea id="bulk-geocode-box" rows="5" placeholder="Tacolicious, Chestnut St, San Francisco&#10;Bi-Rite Creamery&#10;123 Main St, Durango CO"></textarea>
+    <button class="btn-primary" style="margin-top:10px;" onclick="bulkGeocode()">Look up & add</button>
+    <div id="bulk-geocode-status" style="font-size:12.5px;margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="eyebrow">03</span> Add a place manually</h2>
+    <label class="field-label">Google Places API key — saved in this browser so you don't have to re-enter it. Google Places keys are normally locked to your site/app anyway, but you can clear it below if this is a shared computer.</label>
+    <input type="text" id="api-key" placeholder="AIza..." autocomplete="off" oninput="onApiKeyInput(this.value)">
+    <button class="btn-secondary" style="margin-top:8px;" onclick="clearApiKey()">Clear saved key</button>
+    <label class="field-label" style="margin-top:10px;">Search for a place</label>
+    <input type="text" id="place-search" placeholder="Start typing an address or place name...">
+    <div id="search-results" class="search-results"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="eyebrow">04</span> Your places <span class="counter" id="place-count"></span></h2>
+    <input type="text" id="place-filter" placeholder="Search your places..." oninput="renderPlaceList()" style="margin-bottom:10px;">
+    <div class="row" style="margin-bottom:10px;">
+      <button class="btn-secondary" onclick="setAllChecked(true)">Select all</button>
+      <button class="btn-secondary" onclick="setAllChecked(false)">Clear selection</button>
+      <button class="btn-secondary" onclick="regeocodeAll()">↻ Re-check all</button>
+      <button class="btn-secondary" onclick="exportPlaces()">⬇ Export as JSON</button>
+    </div>
+    <div id="place-list" class="place-list"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="eyebrow">05</span> Starting point</h2>
+    <div class="row">
+      <button class="btn-secondary" onclick="useCurrentLocation()">📍 Use my current location</button>
+    </div>
+    <div id="start-status" style="font-size:12.5px;color:var(--paper-dim);margin-top:8px;"></div>
+    <label class="field-label" style="margin-top:12px;">— or search a starting address —</label>
+    <input type="text" id="start-search" placeholder="Search a start location...">
+    <div id="start-search-results" class="search-results"></div>
+
+    <div class="divider-label">Saved starting points</div>
+    <select id="saved-start-select" onchange="selectSavedStart(this.value)" style="width:100%;">
+      <option value="">— choose a saved start —</option>
+    </select>
+    <div id="saved-start-list"></div>
+    <div class="row" style="margin-top:10px;">
+      <input type="text" id="save-start-name" placeholder="Name this location (e.g. Home, Office)" style="flex:1;min-width:150px;">
+      <button class="btn-secondary" onclick="saveCurrentStart()">💾 Save current start</button>
+    </div>
+  </div>
+
+  <button class="btn-primary btn-block" style="padding:15px;font-size:15.5px;" onclick="buildRoute()">Get optimized route</button>
+
+  <div class="card" id="route-output">
+    <h2><span class="eyebrow">06</span> Review & adjust order</h2>
+    <div id="pin-note-area"></div>
+    <div id="editable-order"></div>
+    <div class="row" style="margin-top:12px;">
+      <button class="btn-secondary" onclick="resetToOptimized()">↻ Reset to optimized order</button>
+    </div>
+    <button class="btn-primary btn-block" style="margin-top:14px;padding:14px;font-size:15px;" onclick="confirmRoute()">✓ Confirm route & get map link</button>
+    <div id="confirmed-badge" class="confirmed-badge"></div>
+    <div id="legs-note" style="font-size:12.5px;color:var(--paper-dim);margin-top:10px;"></div>
+    <div id="legs-container"></div>
+  </div>
+
+  <div class="card">
+    <button class="settings-toggle" onclick="toggleSettings()">Refresh reminder settings</button>
+    <div id="settings-panel" style="display:none;margin-top:10px;">
+      <label class="field-label">Remind me to refresh my list after</label>
+      <select id="refresh-interval" onchange="saveRefreshInterval()">
+        <option value="3">3 days</option>
+        <option value="7">7 days</option>
+        <option value="14">14 days</option>
+        <option value="30">30 days</option>
+      </select>
+      <div class="row" style="margin-top:14px;">
+        <button class="btn-danger" onclick="clearAllData()">Reset local data (places, starts, settings)</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+/* ---------- In-memory app state, cached to localStorage as a safety net ---------- */
+const LS_STATE = 'wp_app_state_cache';
+let appState = {
+  places: [],
+  startPoints: [],
+  refreshIntervalDays: 7,
+  lastImportAt: null
+};
+let googleApiKey = '';   // mirrored to localStorage — see onApiKeyInput/restoreApiKey below
+const LS_API_KEY = 'wp_google_api_key';
+function onApiKeyInput(value){
+  googleApiKey = value.trim();
+  try{ localStorage.setItem(LS_API_KEY, googleApiKey); }catch(e){ console.error('Save failed:', e); }
+}
+function restoreApiKey(){
+  try{
+    const saved = localStorage.getItem(LS_API_KEY);
+    if(saved){
+      googleApiKey = saved;
+      document.getElementById('api-key').value = saved;
+    }
+  }catch(e){ console.error('Restore failed:', e); }
+}
+function clearApiKey(){
+  googleApiKey = '';
+  document.getElementById('api-key').value = '';
+  localStorage.removeItem(LS_API_KEY);
+}
+
+// Mirrors appState into localStorage on every change, so the browser remembers
+// places, saved starts, and settings between visits.
+function persistLocal(){
+  try{
+    localStorage.setItem(LS_STATE, JSON.stringify(appState));
+  }catch(e){
+    console.error('Save failed:', e);
+  }
+}
+function restoreLocal(){
+  try{
+    const raw = localStorage.getItem(LS_STATE);
+    if(!raw) return false;
+    const cached = JSON.parse(raw);
+    appState.places = cached.places||[];
+    appState.startPoints = cached.startPoints||[];
+    appState.refreshIntervalDays = cached.refreshIntervalDays||7;
+    appState.lastImportAt = cached.lastImportAt||null;
+    return true;
+  }catch(e){
+    console.error('Restore failed:', e);
+    return false;
+  }
+}
+
+function loadPlaces(){ return appState.places; }
+function savePlaces(list){ appState.places = list; persistLocal(); }
+
+function loadStartPoints(){ return appState.startPoints; }
+function saveStartPoints(list){ appState.startPoints = list; persistLocal(); }
+
+/* ---------- Merge / dedupe ---------- */
+function dedupeKey(p){ return p.name.trim().toLowerCase()+'|'+p.lat.toFixed(4)+'|'+p.lng.toFixed(4); }
+
+function mergePlaces(newOnes){
+  const existing = loadPlaces();
+  const seen = new Set(existing.map(dedupeKey));
+  let added = 0;
+  newOnes.forEach(p=>{
+    if(!p.name || isNaN(p.lat) || isNaN(p.lng)) return;
+    const key = dedupeKey(p);
+    if(!seen.has(key)){
+      existing.push({...p, checked:false, id: crypto.randomUUID()});
+      seen.add(key);
+      added++;
+    }
+  });
+  savePlaces(existing);
+  appState.lastImportAt = Date.now();
+  persistLocal();
+  renderPlaceList();
+  checkRefreshBanner();
+  return added;
+}
+
+/* ---------- Parsing ---------- */
+function parsePastedContent(text){
+  text = text.trim();
+  if(!text) return [];
+
+  // Try JSON (Google Takeout "Saved Places.json" format: {features:[{geometry:{coordinates:[lng,lat]}, properties:{...}}]})
+  try{
+    const data = JSON.parse(text);
+
+    // Waypoint's own export format: flat array of {name, lat, lng, ...}
+    if(Array.isArray(data) && data.length>0 && data[0].lat!==undefined && data[0].lng!==undefined){
+      return data.map(p=>({name:p.name||'Unnamed place', lat:p.lat, lng:p.lng, src:p.src||'backup'}))
+        .filter(p=>!isNaN(p.lat) && !isNaN(p.lng));
+    }
+
+    if(data.features){
+      const geocoded = [];
+      const needsGeocode = [];
+      data.features.forEach(f=>{
+        const coords = f.geometry && f.geometry.coordinates;
+        const props = f.properties || {};
+        const name = props.name || props.location?.name || null;
+        if(!coords) return;
+        const [lng, lat] = coords;
+        // Takeout often writes [0,0] placeholder coords when it couldn't resolve
+        // a location, and puts the real address in google_maps_url's "q" param instead.
+        if((lat===0 && lng===0) || isNaN(lat) || isNaN(lng)){
+          let address = null;
+          if(props.google_maps_url){
+            try{
+              const u = new URL(props.google_maps_url);
+              address = u.searchParams.get('q');
+            }catch(e){ /* ignore malformed url */ }
+          }
+          if(address) needsGeocode.push(name || address);
+        } else {
+          geocoded.push({name: name || 'Unnamed place', lat, lng, src:'takeout'});
+        }
+      });
+      return {geocoded, needsGeocode};
+    }
+  }catch(e){ /* not JSON, fall through */ }
+
+  // Try KML
+  if(text.includes('<kml') || text.includes('<Placemark')){
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, 'text/xml');
+    const placemarks = Array.from(xml.getElementsByTagName('Placemark'));
+    return placemarks.map(pm=>{
+      const name = pm.getElementsByTagName('name')[0]?.textContent || 'Unnamed place';
+      const coordText = pm.getElementsByTagName('coordinates')[0]?.textContent;
+      if(!coordText) return null;
+      const [lng, lat] = coordText.trim().split(',').map(Number);
+      return {name, lat, lng, src:'kml'};
+    }).filter(Boolean);
+  }
+
+  // Try plain "Name, lat, lng" lines
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const results = [];
+  lines.forEach(line=>{
+    const parts = line.split(',');
+    if(parts.length>=3){
+      const lat = parseFloat(parts[parts.length-2]);
+      const lng = parseFloat(parts[parts.length-1]);
+      const name = parts.slice(0,parts.length-2).join(',').trim();
+      if(!isNaN(lat) && !isNaN(lng)) results.push({name, lat, lng, src:'manual'});
+    }
+  });
+  return results;
+}
+
+function importFromPaste(){
+  const text = document.getElementById('paste-box').value;
+  const parsed = parsePastedContent(text);
+  const status = document.getElementById('import-status');
+
+  // Normalize: parser returns either a flat array, or {geocoded, needsGeocode} when
+  // Takeout gave us [0,0] placeholder coords and only an address.
+  const geocoded = Array.isArray(parsed) ? parsed : parsed.geocoded;
+  const needsGeocode = Array.isArray(parsed) ? [] : parsed.needsGeocode;
+
+  if(geocoded.length===0 && needsGeocode.length===0){
+    status.style.color = 'var(--danger)';
+    status.textContent = "Couldn't find any places in that text. Check the format and try again.";
+    return;
+  }
+
+  const added = geocoded.length ? mergePlaces(geocoded) : 0;
+
+  let msg = '';
+  if(geocoded.length) msg += `Found ${geocoded.length} places with coordinates, added ${added} new. `;
+  if(needsGeocode.length){
+    msg += `${needsGeocode.length} place(s) had no coordinates in the export (a known Takeout gap) — moved their addresses into "Add places by name/address" below. Add your API key there and click "Look up & add" to finish importing them.`;
+    const box = document.getElementById('bulk-geocode-box');
+    box.value = (box.value ? box.value + '\n' : '') + needsGeocode.join('\n');
+    document.getElementById('bulk-geocode-box').scrollIntoView({behavior:'smooth', block:'center'});
+  }
+  status.style.color = needsGeocode.length ? 'var(--amber)' : 'var(--teal)';
+  status.textContent = msg;
+  document.getElementById('paste-box').value = '';
+}
+
+function importFromFile(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    document.getElementById('paste-box').value = e.target.result;
+    importFromPaste();
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
+function focusPasteBox(){ document.getElementById('paste-box').focus(); }
+
+/* ---------- Refresh reminder ---------- */
+function checkRefreshBanner(){
+  const last = appState.lastImportAt;
+  const intervalDays = appState.refreshIntervalDays;
+  const banner = document.getElementById('refresh-banner');
+  if(!last){ banner.style.display='none'; return; }
+  const daysSince = Math.floor((Date.now()-last)/86400000);
+  if(daysSince >= intervalDays){
+    banner.style.display='flex';
+    document.getElementById('refresh-banner-text').textContent =
+      `Last updated ${daysSince} day${daysSince===1?'':'s'} ago — refresh from Google Maps to catch new saves?`;
+  } else {
+    banner.style.display='none';
+  }
+}
+
+function toggleSettings(){
+  const panel = document.getElementById('settings-panel');
+  panel.style.display = panel.style.display==='none' ? 'block' : 'none';
+}
+function saveRefreshInterval(){
+  appState.refreshIntervalDays = parseInt(document.getElementById('refresh-interval').value);
+  persistLocal();
+  checkRefreshBanner();
+}
+function clearAllData(){
+  if(confirm('This resets your places, saved starts, and settings — permanently, in this browser. Continue?')){
+    appState = { places: [], startPoints: [], refreshIntervalDays: 7, lastImportAt: null };
+    sessionStorage.removeItem(SS_PINS);
+    localStorage.removeItem(LS_STATE);
+    document.getElementById('refresh-interval').value = 7;
+    startLocation = null;
+    document.getElementById('start-status').textContent = '';
+    persistLocal();
+    renderPlaceList();
+    renderSavedStarts();
+    checkRefreshBanner();
+  }
+}
+
+/* ---------- Place list rendering ---------- */
+function renderPlaceList(){
+  const places = loadPlaces();
+  const filterText = (document.getElementById('place-filter')?.value || '').trim().toLowerCase();
+  const filtered = filterText ? places.filter(p=>
+    p.name.toLowerCase().includes(filterText) ||
+    (p.address && p.address.toLowerCase().includes(filterText))
+  ) : places;
+
+  document.getElementById('place-count').textContent =
+    filterText ? `(${filtered.length} of ${places.length})` : `(${places.length})`;
+
+  const list = document.getElementById('place-list');
+  if(places.length===0){
+    list.innerHTML = '<div class="empty">No places yet — import from Takeout above or add one manually.</div>';
+    return;
+  }
+  if(filtered.length===0){
+    list.innerHTML = `<div class="empty">No places match "${escapeHtml(filterText)}".</div>`;
+    return;
+  }
+  const checkedCount = places.filter(p=>p.checked).length;
+  const pinMax = Math.max(checkedCount, 1);
+  list.innerHTML = filtered.map(p=>`
+    <div class="place">
+      <input type="checkbox" ${p.checked?'checked':''} onchange="toggleChecked('${p.id}', this.checked)">
+      <input type="number" class="pin-order" min="1" max="${pinMax}" placeholder="#" value="${p.pinOrder||''}"
+        title="Set a number to force this stop's position in the route (1–${pinMax}, based on how many places are checked). Leave blank to let the optimizer place it."
+        onchange="setPinOrder('${p.id}', this.value)">
+      <span class="name">${escapeHtml(p.name)}${p.address ? ` <span style="color:var(--paper-dim);font-weight:400;">(${escapeHtml(p.address)})</span>` : ''}</span>
+      <span class="src">${p.src||''}</span>
+      <button class="rm" onclick="regeocodePlace('${p.id}')" title="Re-check this location">↻</button>
+      <button class="rm" onclick="removePlace('${p.id}')">✕</button>
+    </div>
+  `).join('');
+}
+
+function setPinOrder(id, value){
+  const places = loadPlaces();
+  const p = places.find(p=>p.id===id);
+  if(!p) return;
+  let n = parseInt(value);
+  if(value==='' || isNaN(n)){
+    p.pinOrder = null;
+  } else {
+    const checkedCount = places.filter(pl=>pl.checked).length;
+    const max = Math.max(checkedCount, 1);
+    n = Math.min(Math.max(n, 1), max);
+    p.pinOrder = n;
+  }
+  appState.places = places; // pins are session-only — not written to the persisted local cache
+  savePinsToSession(places);
+  renderPlaceList(); // re-render so the input reflects any clamping, and so other rows' max stays current
+}
+
+/* ---------- Pin order: survives a refresh (sessionStorage) but wipes when the browser tab closes ---------- */
+const SS_PINS = 'wp_pin_order_session';
+function savePinsToSession(places){
+  const pins = {};
+  places.forEach(p=>{ if(p.pinOrder!=null) pins[p.id] = p.pinOrder; });
+  sessionStorage.setItem(SS_PINS, JSON.stringify(pins));
+}
+function applySessionPins(){
+  let pins = {};
+  try{ pins = JSON.parse(sessionStorage.getItem(SS_PINS) || '{}'); }catch(e){ pins = {}; }
+  appState.places.forEach(p=>{ p.pinOrder = pins[p.id] ?? null; });
+}
+
+// Re-geocodes a single place object in place. Returns {changed, error}. Does not save/render —
+// callers handle that, so regeocodeAll can batch without a save+render per item.
+async function regeocodeOne(key, p){
+  const query = p.address || p.name;
+  try{
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'X-Goog-Api-Key': key,
+        'X-Goog-FieldMask':'places.displayName,places.formattedAddress,places.location'
+      },
+      body: JSON.stringify({textQuery: query, ...locationBiasPayload()})
+    });
+    const data = await res.json();
+    if(!res.ok || !data.places || !data.places[0]){
+      return {error: data.error?.message || 'no match found'};
+    }
+    const pl = data.places[0];
+    const oldCoords = `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
+    p.name = pl.displayName.text;
+    p.address = pl.formattedAddress || p.address;
+    p.lat = pl.location.latitude;
+    p.lng = pl.location.longitude;
+    p.src = 're-checked';
+    const newCoords = `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
+    return {changed: oldCoords !== newCoords};
+  }catch(e){
+    return {error: e.message};
+  }
+}
+
+async function regeocodePlace(id){
+  const key = googleApiKey;
+  if(!key){ alert('Add your Google Places API key in the "Add a place manually" section first.'); return; }
+  const places = loadPlaces();
+  const p = places.find(p=>p.id===id);
+  if(!p) return;
+  const result = await regeocodeOne(key, p);
+  if(result.error){
+    alert(`Couldn't re-check "${p.name}": ${result.error}.`);
+    return;
+  }
+  savePlaces(places);
+  renderPlaceList();
+  alert(result.changed
+    ? `Updated "${p.name}" — coordinates changed.`
+    : `"${p.name}" already had the correct location — no change needed.`);
+}
+
+async function regeocodeAll(){
+  const key = googleApiKey;
+  if(!key){ alert('Add your Google Places API key in the "Add a place manually" section first.'); return; }
+  const places = loadPlaces();
+  if(places.length===0){ alert('No places to re-check yet.'); return; }
+  if(!confirm(`Re-check all ${places.length} places against Google Maps? This uses ${places.length} API lookups.`)) return;
+
+  const status = document.getElementById('bulk-geocode-status');
+  let changed = 0, failed = [];
+  for(let i=0;i<places.length;i++){
+    const p = places[i];
+    if(status) status.textContent = `Re-checking ${i+1}/${places.length}: ${p.name}…`;
+    const result = await regeocodeOne(key, p);
+    if(result.error) failed.push(`${p.name} (${result.error})`);
+    else if(result.changed) changed++;
+    await new Promise(r=>setTimeout(r, 150)); // gentle pacing between requests
+  }
+  savePlaces(places);
+  renderPlaceList();
+  const msg = `Re-checked ${places.length} places — ${changed} had coordinates corrected.` +
+    (failed.length ? ` ${failed.length} couldn't be matched: ${failed.join(', ')}.` : '');
+  if(status){ status.style.color = failed.length ? 'var(--amber)' : 'var(--teal)'; status.textContent = msg; }
+  alert(msg);
+}
+
+function exportPlaces(){
+  const places = loadPlaces();
+  if(places.length===0){ alert('No places to export yet.'); return; }
+  const exportable = places.map(({pinOrder, ...rest})=>rest); // pins are session-only, not part of the exported record
+  const blob = new Blob([JSON.stringify(exportable, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `waypoint-places-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function toggleChecked(id, checked){
+  const places = loadPlaces();
+  const p = places.find(p=>p.id===id);
+  if(p) p.checked = checked;
+  savePlaces(places);
+  renderPlaceList(); // pin-order max depends on the checked count, so refresh it
+}
+
+function removePlace(id){
+  const places = loadPlaces().filter(p=>p.id!==id);
+  savePlaces(places);
+  renderPlaceList();
+}
+
+function setAllChecked(val){
+  const places = loadPlaces();
+  places.forEach(p=>p.checked=val);
+  savePlaces(places);
+  renderPlaceList();
+}
+
+/* ---------- Location bias helper (fixes ambiguous short addresses like "1933 Union St" 
+   resolving to the wrong city entirely) ---------- */
+function getSearchBias(){
+  if(startLocation) return {lat: startLocation.lat, lng: startLocation.lng};
+  const places = loadPlaces().filter(p=>!isNaN(p.lat) && !isNaN(p.lng));
+  if(places.length>0){
+    const lat = places.reduce((s,p)=>s+p.lat,0)/places.length;
+    const lng = places.reduce((s,p)=>s+p.lng,0)/places.length;
+    return {lat, lng};
+  }
+  return null;
+}
+function locationBiasPayload(){
+  const bias = getSearchBias();
+  if(!bias) return {};
+  return {locationBias: {circle: {center: {latitude: bias.lat, longitude: bias.lng}, radius: 50000}}};
+}
+
+/* ---------- Places Autocomplete (manual add + start search) ---------- */
+let autocompleteTimer;
+function wirePlaceSearch(inputId, resultsId, onSelect){
+  const input = document.getElementById(inputId);
+  input.addEventListener('input', ()=>{
+    clearTimeout(autocompleteTimer);
+    const q = input.value.trim();
+    const resultsDiv = document.getElementById(resultsId);
+    if(q.length<3){ resultsDiv.innerHTML=''; return; }
+    autocompleteTimer = setTimeout(()=>runTextSearch(q, resultsDiv, onSelect), 400);
+  });
+}
+
+async function runTextSearch(query, resultsDiv, onSelect){
+  const key = googleApiKey;
+  if(!key){
+    resultsDiv.innerHTML = '<div class="search-result" style="color:var(--danger);cursor:default;">Add your Google Places API key above to search.</div>';
+    return;
+  }
+  resultsDiv.innerHTML = '<div class="search-result" style="cursor:default;">Searching…</div>';
+  try{
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'X-Goog-Api-Key': key,
+        'X-Goog-FieldMask':'places.displayName,places.formattedAddress,places.location'
+      },
+      body: JSON.stringify({textQuery: query, ...locationBiasPayload()})
+    });
+    const data = await res.json();
+
+    if(!res.ok){
+      const msg = data.error?.message || `HTTP ${res.status}`;
+      resultsDiv.innerHTML = `<div class="search-result" style="color:var(--danger);cursor:default;">Google API error: ${escapeHtml(msg)}</div>`;
+      console.error('Places API error:', data);
+      return;
+    }
+    if(!data.places || data.places.length===0){
+      resultsDiv.innerHTML = '<div class="search-result" style="cursor:default;">No results for that search.</div>';
+      return;
+    }
+    resultsDiv.innerHTML = data.places.slice(0,5).map((pl,i)=>`
+      <div class="search-result" onclick='selectSearchResult(${i})'>${escapeHtml(pl.displayName.text)}<br><span style="color:var(--paper-dim);font-size:11.5px;">${escapeHtml(pl.formattedAddress||'')}</span></div>
+    `).join('');
+    window.__lastSearchResults = data.places;
+    window.__lastSearchCallback = onSelect;
+  }catch(e){
+    resultsDiv.innerHTML = `<div class="search-result" style="color:var(--danger);cursor:default;">Request failed: ${escapeHtml(e.message)}. This is often a CORS/referrer restriction issue — check the key restrictions match the exact URL you're testing from.</div>`;
+    console.error('Places search fetch failed:', e);
+  }
+}
+
+function selectSearchResult(i){
+  const pl = window.__lastSearchResults[i];
+  window.__lastSearchCallback({
+    name: pl.displayName.text,
+    address: pl.formattedAddress || null,
+    lat: pl.location.latitude,
+    lng: pl.location.longitude
+  });
+}
+
+wirePlaceSearch('place-search','search-results', (place)=>{
+  mergePlaces([{...place, src:'search'}]);
+  document.getElementById('place-search').value='';
+  document.getElementById('search-results').innerHTML='';
+});
+
+/* ---------- Bulk geocode (for lists that can't be exported, e.g. shared lists) ---------- */
+async function bulkGeocode(){
+  const key = googleApiKey;
+  const status = document.getElementById('bulk-geocode-status');
+  if(!key){
+    status.style.color = 'var(--danger)';
+    status.textContent = 'Add your Google Places API key in the section below first.';
+    return;
+  }
+  const lines = document.getElementById('bulk-geocode-box').value
+    .split('\n').map(l=>l.trim()).filter(Boolean);
+  if(lines.length===0){
+    status.textContent = 'Paste at least one place first.';
+    return;
+  }
+  status.style.color = 'var(--paper-dim)';
+  status.textContent = `Looking up ${lines.length} places… (0/${lines.length})`;
+
+  const found = [];
+  const failed = [];
+  for(let i=0;i<lines.length;i++){
+    const query = lines[i];
+    try{
+      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'X-Goog-Api-Key': key,
+          'X-Goog-FieldMask':'places.displayName,places.formattedAddress,places.location'
+        },
+        body: JSON.stringify({textQuery: query, ...locationBiasPayload()})
+      });
+      const data = await res.json();
+      if(!res.ok){
+        console.error('Geocode error for', query, data);
+        failed.push(`${query} (${data.error?.message || 'HTTP '+res.status})`);
+      } else if(data.places && data.places[0]){
+        const pl = data.places[0];
+        found.push({name: pl.displayName.text, address: pl.formattedAddress || null, lat: pl.location.latitude, lng: pl.location.longitude, src:'geocoded'});
+      } else {
+        failed.push(query);
+      }
+    }catch(e){
+      failed.push(query);
+    }
+    status.textContent = `Looking up ${lines.length} places… (${i+1}/${lines.length})`;
+    await new Promise(r=>setTimeout(r, 150)); // gentle pacing between requests
+  }
+
+  const added = mergePlaces(found);
+  status.style.color = failed.length ? 'var(--amber)' : 'var(--teal)';
+  status.textContent = `Added ${added} of ${lines.length}.` +
+    (failed.length ? ` Couldn't match: ${failed.join(', ')} — try adding city/state or a fuller address.` : '');
+  if(added>0) document.getElementById('bulk-geocode-box').value = '';
+}
+
+let startLocation = null; // {lat, lng, label}
+wirePlaceSearch('start-search','start-search-results', (place)=>{
+  startLocation = {lat: place.lat, lng: place.lng, label: place.name};
+  document.getElementById('start-status').textContent = `Start: ${place.name}`;
+  document.getElementById('start-search').value='';
+  document.getElementById('start-search-results').innerHTML='';
+  document.getElementById('saved-start-select').value = '';
+});
+
+function useCurrentLocation(){
+  const status = document.getElementById('start-status');
+  if(!navigator.geolocation){ status.textContent='Geolocation not supported in this browser.'; return; }
+  status.textContent = 'Locating…';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    startLocation = {lat: pos.coords.latitude, lng: pos.coords.longitude, label:'Current location'};
+    status.textContent = `Start: current location (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`;
+    document.getElementById('saved-start-select').value = '';
+  }, err=>{
+    status.textContent = 'Could not get your location — check browser permissions.';
+  });
+}
+
+/* ---------- Saved starting points ---------- */
+function renderSavedStarts(){
+  const points = loadStartPoints();
+  const select = document.getElementById('saved-start-select');
+  const prevValue = select.value;
+  select.innerHTML = '<option value="">— choose a saved start —</option>' +
+    points.map(p=>`<option value="${p.id}">${escapeHtml(p.label)}</option>`).join('');
+  select.value = points.some(p=>p.id===prevValue) ? prevValue : '';
+
+  const list = document.getElementById('saved-start-list');
+  if(points.length===0){ list.innerHTML=''; return; }
+  list.innerHTML = points.map(p=>`
+    <div class="saved-start-row">
+      <span class="name">${escapeHtml(p.label)}</span>
+      <button class="mini-btn" onclick="selectSavedStart('${p.id}')" title="Use this as start">Use</button>
+      <button class="mini-btn rm-mini" onclick="removeSavedStart('${p.id}')" title="Delete">✕</button>
+    </div>`).join('');
+}
+
+function selectSavedStart(id){
+  if(!id) return;
+  const points = loadStartPoints();
+  const p = points.find(p=>p.id===id);
+  if(!p) return;
+  startLocation = {lat: p.lat, lng: p.lng, label: p.label};
+  document.getElementById('start-status').textContent = `Start: ${p.label}`;
+  document.getElementById('saved-start-select').value = id;
+}
+
+function removeSavedStart(id){
+  const points = loadStartPoints().filter(p=>p.id!==id);
+  saveStartPoints(points);
+  renderSavedStarts();
+}
+
+function saveCurrentStart(){
+  if(!startLocation){
+    alert('Set a starting point first (current location, search, or a saved one) before saving it.');
+    return;
+  }
+  const nameInput = document.getElementById('save-start-name');
+  const label = nameInput.value.trim() || startLocation.label;
+  const points = loadStartPoints();
+  // avoid piling up exact duplicates under different names
+  const dupe = points.find(p=>Math.abs(p.lat-startLocation.lat)<1e-6 && Math.abs(p.lng-startLocation.lng)<1e-6);
+  if(dupe){
+    dupe.label = label;
+  } else {
+    points.push({id: crypto.randomUUID(), label, lat: startLocation.lat, lng: startLocation.lng});
+  }
+  saveStartPoints(points);
+  nameInput.value = '';
+  renderSavedStarts();
+}
+
+/* ---------- Route optimization (nearest-neighbor + 2-opt) ---------- */
+function haversine(a,b){
+  const R=6371;
+  const dLat=(b.lat-a.lat)*Math.PI/180;
+  const dLng=(b.lng-a.lng)*Math.PI/180;
+  const la1=a.lat*Math.PI/180, la2=b.lat*Math.PI/180;
+  const h=Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+function nearestNeighborOrder(start, stops){
+  const remaining = [...stops];
+  const order = [];
+  let current = start;
+  while(remaining.length){
+    let bestIdx=0, bestDist=Infinity;
+    remaining.forEach((s,i)=>{
+      const d = haversine(current, s);
+      if(d<bestDist){bestDist=d; bestIdx=i;}
+    });
+    const next = remaining.splice(bestIdx,1)[0];
+    order.push(next);
+    current = next;
+  }
+  return order;
+}
+
+function routeLength(start, order){
+  let total=0, prev=start;
+  order.forEach(s=>{ total+=haversine(prev,s); prev=s; });
+  return total;
+}
+
+function twoOpt(start, order){
+  let improved = true;
+  while(improved){
+    improved = false;
+    for(let i=0;i<order.length-1;i++){
+      for(let j=i+1;j<order.length;j++){
+        const newOrder = order.slice(0,i).concat(order.slice(i,j+1).reverse(), order.slice(j+1));
+        if(routeLength(start,newOrder) < routeLength(start,order) - 1e-6){
+          order = newOrder;
+          improved = true;
+        }
+      }
+    }
+  }
+  return order;
+}
+
+// Given a fixed skeleton of pinned stops (in absolute slot order), thread the
+// remaining unpinned stops into the open slots between/after them, always
+// choosing whichever unpinned stop is nearest to the current point in the walk.
+function computeOrder(){
+  const allChecked = loadPlaces().filter(p=>p.checked);
+  const pinned = allChecked.filter(p=>p.pinOrder!=null).sort((a,b)=>a.pinOrder-b.pinOrder);
+  const unpinned = allChecked.filter(p=>p.pinOrder==null);
+
+  let order;
+  let pinNote = '';
+  if(pinned.length>0){
+    const total = allChecked.length;
+
+    // Ties: multiple places sharing the same pin number. Group them, then within
+    // each group walk nearest-neighbor starting from whatever precedes the group
+    // (the previous distinct-numbered pin, or the start point for the first group).
+    const pinnedSorted = [...pinned].sort((a,b)=>a.pinOrder-b.pinOrder);
+    const resolved = [];
+    let refPoint = startLocation;
+    let gi = 0;
+    while(gi < pinnedSorted.length){
+      let gj = gi;
+      while(gj < pinnedSorted.length && pinnedSorted[gj].pinOrder === pinnedSorted[gi].pinOrder) gj++;
+      const group = pinnedSorted.slice(gi, gj);
+      const remaining = [...group];
+      let current = refPoint;
+      while(remaining.length){
+        let bestIdx=0, bestDist=Infinity;
+        remaining.forEach((p,idx)=>{ const d=haversine(current,p); if(d<bestDist){bestDist=d; bestIdx=idx;} });
+        const next = remaining.splice(bestIdx,1)[0];
+        resolved.push(next);
+        current = next;
+      }
+      refPoint = current; // next group (or the unpinned-fill logic) chains off the last-placed tied pin
+      gi = gj;
+    }
+
+    const anchors = resolved.map(p=>({point:p, slot: p.pinOrder}));
+    // resolve duplicate/out-of-range slots by nudging forward, keeping the tie-broken order
+    let lastSlot = 0;
+    anchors.forEach(a=>{ a.slot = Math.max(Math.min(a.slot, total), lastSlot+1); lastSlot = a.slot; });
+
+    let available = [...unpinned];
+    let current = startLocation;
+    const finalOrder = new Array(Math.max(lastSlot, total)).fill(null);
+    let prevSlot = 0;
+    anchors.forEach(a=>{
+      const gap = a.slot - prevSlot - 1; // open unpinned slots before this anchor
+      for(let i=0;i<gap && available.length;i++){
+        let bestIdx=0, bestDist=Infinity;
+        available.forEach((s,idx)=>{ const d=haversine(current,s); if(d<bestDist){bestDist=d; bestIdx=idx;} });
+        const next = available.splice(bestIdx,1)[0];
+        finalOrder[prevSlot+i] = next;
+        current = next;
+      }
+      finalOrder[a.slot-1] = a.point;
+      current = a.point;
+      prevSlot = a.slot;
+    });
+    // fill remaining unpinned after the last anchor, same nearest-next logic
+    let idx = prevSlot;
+    while(available.length){
+      let bestIdx=0, bestDist=Infinity;
+      available.forEach((s,i)=>{ const d=haversine(current,s); if(d<bestDist){bestDist=d; bestIdx=i;} });
+      const next = available.splice(bestIdx,1)[0];
+      finalOrder[idx] = next;
+      current = next;
+      idx++;
+    }
+    order = finalOrder.filter(Boolean);
+    const hadTies = pinnedSorted.some((p,idx)=> idx>0 && p.pinOrder===pinnedSorted[idx-1].pinOrder);
+    pinNote = `<div class="pin-note">${pinned.length} stop(s) locked to their exact position — the rest thread in around them by proximity.${hadTies ? ' Some pins shared the same slot number, so ties were broken by picking whichever was closer to the previous stop.' : ''} Adjust freely below before confirming.</div>`;
+  } else {
+    order = nearestNeighborOrder(startLocation, allChecked);
+    if(order.length<=12) order = twoOpt(startLocation, order);
+  }
+  return {order, pinNote};
+}
+
+/* ---------- Review / adjust / confirm step ---------- */
+let pendingOrder = [];   // the order currently shown for editing
+let lastComputedOrder = []; // freshly optimized order, for "reset"
+let currentPinNote = '';
+
+function buildRoute(){
+  const allChecked = loadPlaces().filter(p=>p.checked);
+  const outputCard = document.getElementById('route-output');
+  if(allChecked.length===0){
+    alert('Check at least one place first.');
+    return;
+  }
+  if(!startLocation){
+    alert('Set a starting point first (current location or search).');
+    return;
+  }
+
+  const {order, pinNote} = computeOrder();
+  pendingOrder = order.slice();
+  lastComputedOrder = order.slice();
+  currentPinNote = pinNote;
+
+  // Reset the confirmed map-link state — it needs to be regenerated for the new order.
+  document.getElementById('legs-container').innerHTML = '';
+  document.getElementById('legs-note').textContent = '';
+  document.getElementById('confirmed-badge').classList.remove('show');
+
+  renderEditableOrder();
+  outputCard.classList.add('show');
+  outputCard.scrollIntoView({behavior:'smooth'});
+}
+
+function renderEditableOrder(){
+  document.getElementById('pin-note-area').innerHTML = currentPinNote;
+
+  const startRow = `
+    <div class="stop-row start-row">
+      <span class="n">0</span>
+      <span class="name">${escapeHtml(startLocation.label)} (start)</span>
+    </div>`;
+
+  const stopRows = pendingOrder.map((s,i)=>`
+    <div class="stop-row">
+      <span class="n">${i+1}</span>
+      <span class="name">${escapeHtml(s.name)}${s.pinOrder!=null?' <span class="pin-flag">📌</span>':''}</span>
+      <button class="mini-btn" onclick="movePendingStop(${i},-1)" ${i===0?'disabled':''} title="Move earlier">↑</button>
+      <button class="mini-btn" onclick="movePendingStop(${i},1)" ${i===pendingOrder.length-1?'disabled':''} title="Move later">↓</button>
+      <button class="mini-btn rm-mini" onclick="removePendingStop(${i})" title="Drop this stop">✕</button>
+    </div>`).join('');
+
+  document.getElementById('editable-order').innerHTML = startRow + stopRows;
+
+  // Any manual reorder invalidates the previously generated map link until re-confirmed.
+  document.getElementById('legs-container').innerHTML = '';
+  document.getElementById('legs-note').textContent = '';
+  document.getElementById('confirmed-badge').classList.remove('show');
+}
+
+function movePendingStop(i, dir){
+  const j = i + dir;
+  if(j<0 || j>=pendingOrder.length) return;
+  [pendingOrder[i], pendingOrder[j]] = [pendingOrder[j], pendingOrder[i]];
+  renderEditableOrder();
+}
+
+function removePendingStop(i){
+  pendingOrder.splice(i,1);
+  renderEditableOrder();
+}
+
+function resetToOptimized(){
+  pendingOrder = lastComputedOrder.slice();
+  renderEditableOrder();
+}
+
+function confirmRoute(){
+  if(pendingOrder.length===0){
+    alert('Your route has no stops left — add some back or re-run the optimizer.');
+    return;
+  }
+
+  // Google Maps' web/app Directions UI caps at 10 total stops
+  // (origin + up to 9 waypoints + destination). Split into legs if we're over.
+  const MAX_STOPS_PER_LEG = 10;
+  const legsContainer = document.getElementById('legs-container');
+  const legsNote = document.getElementById('legs-note');
+  legsContainer.innerHTML = '';
+
+  const fullSeq = [startLocation, ...pendingOrder];
+  const legs = [];
+  let i = 0;
+  while(i < fullSeq.length-1){
+    const legPoints = fullSeq.slice(i, Math.min(i+MAX_STOPS_PER_LEG, fullSeq.length));
+    legs.push(legPoints);
+    i += MAX_STOPS_PER_LEG - 1; // overlap last point as next leg's start
+  }
+
+  if(legs.length>1){
+    legsNote.textContent = `${fullSeq.length} total stops exceeds Google Maps' 10-stop limit per trip — split into ${legs.length} legs. Open and complete them in order.`;
+  } else {
+    legsNote.textContent = '';
+  }
+
+  legs.forEach((legPoints, idx)=>{
+    const origin = `${legPoints[0].lat},${legPoints[0].lng}`;
+    const destination = `${legPoints[legPoints.length-1].lat},${legPoints[legPoints.length-1].lng}`;
+    const mid = legPoints.slice(1,-1).map(s=>`${s.lat},${s.lng}`).join('|');
+    let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+    if(mid) url += `&waypoints=${encodeURIComponent(mid)}`;
+    const a = document.createElement('a');
+    a.className = 'maps-link';
+    a.href = url;
+    a.target = '_blank';
+    a.style.marginTop = idx===0 ? '10px' : '8px';
+    a.textContent = legs.length>1 ? `Open leg ${idx+1} of ${legs.length} →` : 'Open in Google Maps →';
+    legsContainer.appendChild(a);
+  });
+
+  const badge = document.getElementById('confirmed-badge');
+  badge.textContent = `Route confirmed with ${pendingOrder.length} stop(s). Reorder or drop stops above any time — you'll just need to confirm again.`;
+  badge.classList.add('show');
+  legsContainer.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+/* ---------- Init ---------- */
+restoreLocal();
+restoreApiKey();
+renderPlaceList();
+renderSavedStarts();
+checkRefreshBanner();
+</script>
+
+</body>
+</html>
