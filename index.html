@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Delivery Route Optimization</title>
+<title>Waypoint — Route Planner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600;700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -369,22 +369,14 @@
   </div>
 
   <div class="card">
-    <h2><span class="eyebrow">01</span> Add places by name/address</h2>
-    <label class="field-label">Paste one place per line — name, address, or both. Good for lists you can't export (e.g. shared/collaborative lists). Each line gets geocoded automatically.</label>
-    <textarea id="bulk-geocode-box" rows="5" placeholder="Lee's Sandwiches"></textarea>
-    <button class="btn-primary" style="margin-top:10px;" onclick="bulkGeocode()">Look up & add</button>
-    <div id="bulk-geocode-status" style="font-size:12.5px;margin-top:8px;"></div>
-  </div>
-
-  <div class="card">
-    <h2><span class="eyebrow">02</span> Add a place manually</h2>
+    <h2><span class="eyebrow">01</span> Add a place manually</h2>
     <label class="field-label">Search for a place</label>
     <input type="text" id="place-search" placeholder="Start typing an address or place name...">
     <div id="search-results" class="search-results"></div>
   </div>
 
   <div class="card">
-    <h2><span class="eyebrow">03</span> Your places <span class="counter" id="place-count"></span></h2>
+    <h2><span class="eyebrow">02</span> Your places <span class="counter" id="place-count"></span></h2>
     <input type="text" id="place-filter" placeholder="Search your places..." oninput="renderPlaceList()" style="margin-bottom:10px;">
     <div class="row" style="margin-bottom:10px;">
       <button class="btn-secondary" onclick="setAllChecked(true)">Select all</button>
@@ -396,7 +388,7 @@
   </div>
 
   <div class="card">
-    <h2><span class="eyebrow">04</span> Starting point</h2>
+    <h2><span class="eyebrow">03</span> Starting point</h2>
     <div class="row">
       <button class="btn-secondary" onclick="useCurrentLocation()">Use my current location</button>
     </div>
