@@ -5,39 +5,56 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Waypoint — Route Planner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600;700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#12161d;
-    --panel:#1a2029;
-    --panel-2:#212938;
-    --line:#2b3242;
-    --paper:#e9e6dd;
-    --paper-dim:#a4a9b5;
-    --amber:#e5a13c;
-    --teal:#4d9089;
-    --danger:#c96a5a;
+    --bg:#f7f6f3;
+    --panel:#fcfbf9;
+    --panel-2:#eeece6;
+    --line:#dcd9d0;
+    --paper:#3a362c;
+    --paper-dim:#7d7666;
+    --amber:#3d6069;
+    --teal:#5a7247;
+    --danger:#a3503a;
+  }
+  html[data-theme="dark"]{
+    --bg:#1e1e1e;
+    --panel:#252526;
+    --panel-2:#2d2d2d;
+    --line:#3c3c3c;
+    --paper:#cccccc;
+    --paper-dim:#9d9d9d;
+    --amber:#3794ff;
+    --teal:#89d185;
+    --danger:#f14c4c;
+  }
+  body, .card, input, textarea, select, button{
+    transition:background-color .15s ease, color .15s ease, border-color .15s ease;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
     background:var(--bg);
     color:var(--paper);
-    font-family:'Inter',sans-serif;
+    font-family:'Work Sans',sans-serif;
     min-height:100vh;
     padding-bottom:80px;
   }
   header{
-    padding:28px 20px 20px;
-    border-bottom:1px solid var(--line);
+    padding:24px 20px 20px;
+    border-bottom:2px dashed var(--line);
     position:relative;
     overflow:hidden;
   }
+  header .eyebrow{
+    display:block;
+    margin-bottom:6px;
+  }
   header h1{
-    font-family:'Fraunces',serif;
-    font-optical-sizing:auto;
+    font-family:'Roboto Slab',serif;
     font-weight:700;
-    font-size:clamp(28px,7vw,38px);
+    font-size:clamp(26px,7vw,34px);
     margin:0 0 4px;
     letter-spacing:-0.01em;
   }
@@ -45,13 +62,28 @@
     margin:0;
     color:var(--paper-dim);
     font-size:14px;
+    max-width:70%;
   }
   .route-signature{
     position:absolute;
-    top:0; right:-10px;
+    top:0; right:0;
     width:140px; height:100%;
-    opacity:0.5;
+    opacity:0.9;
     pointer-events:none;
+  }
+  .theme-toggle{
+    position:absolute;
+    top:70px; right:20px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    border-radius:2px;
+    padding:7px 11px;
+    cursor:pointer;
   }
   main{
     max-width:640px;
@@ -61,12 +93,12 @@
   .card{
     background:var(--panel);
     border:1px solid var(--line);
-    border-radius:10px;
+    border-radius:2px;
     padding:18px;
     margin-bottom:16px;
   }
   .card h2{
-    font-family:'Fraunces',serif;
+    font-family:'Roboto Slab',serif;
     font-size:16px;
     font-weight:600;
     margin:0 0 12px;
@@ -75,24 +107,24 @@
     gap:8px;
   }
   .eyebrow{
-    font-family:'JetBrains Mono',monospace;
+    font-family:'IBM Plex Mono',monospace;
     font-size:11px;
     color:var(--amber);
     letter-spacing:0.06em;
     text-transform:uppercase;
   }
   button{
-    font-family:'Inter',sans-serif;
+    font-family:'Work Sans',sans-serif;
     font-size:14px;
     font-weight:500;
     border:none;
-    border-radius:7px;
+    border-radius:2px;
     padding:11px 16px;
     cursor:pointer;
     transition:transform .08s ease, opacity .15s ease;
   }
   button:active{transform:scale(0.97);}
-  .btn-primary{background:var(--amber);color:#1a1206;}
+  .btn-primary{background:var(--amber);color:#f3eddb;}
   .btn-secondary{background:var(--panel-2);color:var(--paper);border:1px solid var(--line);}
   .btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}
   .btn-block{width:100%;}
@@ -102,13 +134,13 @@
     background:var(--panel-2);
     border:1px solid var(--line);
     color:var(--paper);
-    border-radius:7px;
+    border-radius:2px;
     padding:10px 12px;
-    font-family:'JetBrains Mono',monospace;
+    font-family:'IBM Plex Mono',monospace;
     font-size:12.5px;
     resize:vertical;
   }
-  input[type=text]{font-family:'Inter',sans-serif;font-size:14px;}
+  input[type=text]{font-family:'Work Sans',sans-serif;font-size:14px;}
   label.field-label{
     display:block;
     font-size:12px;
@@ -116,10 +148,10 @@
     margin-bottom:6px;
   }
   .banner{
-    background:#2c2410;
-    border:1px solid #5c451c;
-    color:#e5c07a;
-    border-radius:8px;
+    background:#e6d49a;
+    border:1px solid #b7963f;
+    color:#5c4415;
+    border-radius:4px;
     padding:12px 14px;
     font-size:13px;
     display:flex;
@@ -127,6 +159,11 @@
     align-items:center;
     gap:10px;
     margin-bottom:16px;
+  }
+  html[data-theme="dark"] .banner{
+    background:#3a3216;
+    border:1px solid #6b5a24;
+    color:#e6cf8f;
   }
   .banner button{padding:7px 12px;font-size:12.5px;}
   .place-list{max-height:320px;overflow-y:auto;}
@@ -148,16 +185,16 @@
     background:var(--panel-2);
     border:1px solid var(--line);
     color:var(--amber);
-    border-radius:5px;
+    border-radius:2px;
     padding:5px 4px;
-    font-family:'JetBrains Mono',monospace;
+    font-family:'IBM Plex Mono',monospace;
     font-size:12px;
     text-align:center;
     flex-shrink:0;
   }
   .place .name{font-size:14px;flex:1;}
   .place .src{
-    font-family:'JetBrains Mono',monospace;
+    font-family:'IBM Plex Mono',monospace;
     font-size:10px;
     color:var(--paper-dim);
     text-transform:uppercase;
@@ -173,7 +210,7 @@
     padding:20px 0;
   }
   .counter{
-    font-family:'JetBrains Mono',monospace;
+    font-family:'IBM Plex Mono',monospace;
     font-size:12px;
     color:var(--paper-dim);
   }
@@ -181,7 +218,7 @@
   .search-result{
     padding:9px 10px;
     background:var(--panel-2);
-    border-radius:6px;
+    border-radius:2px;
     margin-bottom:6px;
     font-size:13.5px;
     cursor:pointer;
@@ -189,7 +226,7 @@
   }
   .search-result:hover{border-color:var(--amber);}
   .divider-label{
-    font-family:'JetBrains Mono',monospace;
+    font-family:'IBM Plex Mono',monospace;
     font-size:10px;
     color:var(--paper-dim);
     text-transform:uppercase;
@@ -215,7 +252,7 @@
   .stop-row:last-child{border-bottom:none;}
   .stop-row.start-row{color:var(--paper-dim);}
   .stop-row .n{
-    font-family:'JetBrains Mono',monospace;
+    font-family:'IBM Plex Mono',monospace;
     font-size:12.5px;
     color:var(--amber);
     width:20px;
@@ -234,7 +271,7 @@
     background:var(--panel-2);
     border:1px solid var(--line);
     color:var(--paper);
-    border-radius:5px;
+    border-radius:2px;
     width:28px;
     height:28px;
     font-size:13px;
@@ -249,20 +286,20 @@
     display:block;
     text-align:center;
     background:var(--amber);
-    color:#1a1206;
+    color:#f3eddb;
     text-decoration:none;
     font-weight:600;
     padding:14px;
-    border-radius:8px;
+    border-radius:4px;
     margin-top:10px;
   }
   select{
     background:var(--panel-2);
     color:var(--paper);
     border:1px solid var(--line);
-    border-radius:7px;
+    border-radius:2px;
     padding:9px 10px;
-    font-family:'Inter',sans-serif;
+    font-family:'Work Sans',sans-serif;
     font-size:13.5px;
   }
   .settings-toggle{
@@ -293,18 +330,30 @@
   .saved-start-row .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 </style>
+<script>
+  // Runs before paint so the page loads straight into the saved theme, no flash.
+  (function(){
+    try{
+      if(localStorage.getItem('wp_theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+    }catch(e){}
+  })();
+</script>
 </head>
 <body>
 
 <header>
   <svg class="route-signature" viewBox="0 0 140 120" xmlns="http://www.w3.org/2000/svg">
-    <path d="M10,100 C 40,90 30,50 60,45 S 90,20 130,15" stroke="#e5a13c" stroke-width="2" fill="none" stroke-dasharray="1 7" stroke-linecap="round"/>
-    <circle cx="10" cy="100" r="3" fill="#e5a13c"/>
-    <circle cx="60" cy="45" r="3" fill="#4d9089"/>
-    <circle cx="130" cy="15" r="3" fill="#e5a13c"/>
+    <line x1="8" y1="14" x2="132" y2="14" stroke="#b7a878" stroke-width="1" stroke-dasharray="1 5" stroke-linecap="round"/>
+    <line x1="8" y1="106" x2="132" y2="106" stroke="#b7a878" stroke-width="1" stroke-dasharray="1 5" stroke-linecap="round"/>
+    <path d="M14,60 L60,60 L60,30 L126,30" stroke="#2e4a52" stroke-width="1.5" fill="none" stroke-linecap="square"/>
+    <circle cx="14" cy="60" r="2.5" fill="#2e4a52"/>
+    <circle cx="60" cy="30" r="2.5" fill="#5a7247"/>
+    <circle cx="126" cy="30" r="2.5" fill="#2e4a52"/>
   </svg>
+  <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">Dark mode</button>
+  <span class="eyebrow">Trip Ticket</span>
   <h1>Waypoint</h1>
-  <p>Pick your stops, get the optimal driving order, open it in Google Maps.</p>
+  <p>Pick your stops, get the shortest driving order, open it in Google Maps.</p>
 </header>
 
 <main>
@@ -331,17 +380,14 @@
   <div class="card">
     <h2><span class="eyebrow">02</span> Add places by name/address</h2>
     <label class="field-label">Paste one place per line — name, address, or both. Good for lists you can't export (e.g. shared/collaborative lists). Each line gets geocoded automatically.</label>
-    <textarea id="bulk-geocode-box" rows="5" placeholder="Tacolicious, Chestnut St, San Francisco&#10;Bi-Rite Creamery&#10;123 Main St, Durango CO"></textarea>
+    <textarea id="bulk-geocode-box" rows="5" placeholder="Lee's Sandwiches"></textarea>
     <button class="btn-primary" style="margin-top:10px;" onclick="bulkGeocode()">Look up & add</button>
     <div id="bulk-geocode-status" style="font-size:12.5px;margin-top:8px;"></div>
   </div>
 
   <div class="card">
     <h2><span class="eyebrow">03</span> Add a place manually</h2>
-    <label class="field-label">Google Places API key — saved in this browser so you don't have to re-enter it. Google Places keys are normally locked to your site/app anyway, but you can clear it below if this is a shared computer.</label>
-    <input type="text" id="api-key" placeholder="AIza..." autocomplete="off" oninput="onApiKeyInput(this.value)">
-    <button class="btn-secondary" style="margin-top:8px;" onclick="clearApiKey()">Clear saved key</button>
-    <label class="field-label" style="margin-top:10px;">Search for a place</label>
+    <label class="field-label">Search for a place</label>
     <input type="text" id="place-search" placeholder="Start typing an address or place name...">
     <div id="search-results" class="search-results"></div>
   </div>
@@ -361,7 +407,7 @@
   <div class="card">
     <h2><span class="eyebrow">05</span> Starting point</h2>
     <div class="row">
-      <button class="btn-secondary" onclick="useCurrentLocation()">📍 Use my current location</button>
+      <button class="btn-secondary" onclick="useCurrentLocation()">Use my current location</button>
     </div>
     <div id="start-status" style="font-size:12.5px;color:var(--paper-dim);margin-top:8px;"></div>
     <label class="field-label" style="margin-top:12px;">— or search a starting address —</label>
@@ -375,7 +421,7 @@
     <div id="saved-start-list"></div>
     <div class="row" style="margin-top:10px;">
       <input type="text" id="save-start-name" placeholder="Name this location (e.g. Home, Office)" style="flex:1;min-width:150px;">
-      <button class="btn-secondary" onclick="saveCurrentStart()">💾 Save current start</button>
+      <button class="btn-secondary" onclick="saveCurrentStart()">Save current start</button>
     </div>
   </div>
 
@@ -395,7 +441,10 @@
   </div>
 
   <div class="card">
-    <button class="settings-toggle" onclick="toggleSettings()">Refresh reminder settings</button>
+    <div class="row" style="justify-content:space-between;">
+      <button class="settings-toggle" onclick="toggleSettings()">Refresh reminder settings</button>
+      <button class="settings-toggle" onclick="toggleAdvanced()">Advanced</button>
+    </div>
     <div id="settings-panel" style="display:none;margin-top:10px;">
       <label class="field-label">Remind me to refresh my list after</label>
       <select id="refresh-interval" onchange="saveRefreshInterval()">
@@ -407,6 +456,11 @@
       <div class="row" style="margin-top:14px;">
         <button class="btn-danger" onclick="clearAllData()">Reset local data (places, starts, settings)</button>
       </div>
+    </div>
+    <div id="advanced-panel" style="display:none;margin-top:10px;">
+      <label class="field-label">Google Places API key — saved in this browser so you don't have to re-enter it. Google Places keys are normally locked to your site/app anyway, but you can clear it below if this is a shared computer.</label>
+      <input type="text" id="api-key" placeholder="AIza..." autocomplete="off" oninput="onApiKeyInput(this.value)">
+      <button class="btn-secondary" style="margin-top:8px;" onclick="clearApiKey()">Clear saved key</button>
     </div>
   </div>
 
@@ -634,6 +688,10 @@ function toggleSettings(){
   const panel = document.getElementById('settings-panel');
   panel.style.display = panel.style.display==='none' ? 'block' : 'none';
 }
+function toggleAdvanced(){
+  const panel = document.getElementById('advanced-panel');
+  panel.style.display = panel.style.display==='none' ? 'block' : 'none';
+}
 function saveRefreshInterval(){
   appState.refreshIntervalDays = parseInt(document.getElementById('refresh-interval').value);
   persistLocal();
@@ -756,7 +814,7 @@ async function regeocodeOne(key, p){
 
 async function regeocodePlace(id){
   const key = googleApiKey;
-  if(!key){ alert('Add your Google Places API key in the "Add a place manually" section first.'); return; }
+  if(!key){ alert('Add your Google Places API key under Advanced first.'); return; }
   const places = loadPlaces();
   const p = places.find(p=>p.id===id);
   if(!p) return;
@@ -774,7 +832,7 @@ async function regeocodePlace(id){
 
 async function regeocodeAll(){
   const key = googleApiKey;
-  if(!key){ alert('Add your Google Places API key in the "Add a place manually" section first.'); return; }
+  if(!key){ alert('Add your Google Places API key under Advanced first.'); return; }
   const places = loadPlaces();
   if(places.length===0){ alert('No places to re-check yet.'); return; }
   if(!confirm(`Re-check all ${places.length} places against Google Maps? This uses ${places.length} API lookups.`)) return;
@@ -874,7 +932,7 @@ function wirePlaceSearch(inputId, resultsId, onSelect){
 async function runTextSearch(query, resultsDiv, onSelect){
   const key = googleApiKey;
   if(!key){
-    resultsDiv.innerHTML = '<div class="search-result" style="color:var(--danger);cursor:default;">Add your Google Places API key above to search.</div>';
+    resultsDiv.innerHTML = '<div class="search-result" style="color:var(--danger);cursor:default;">Add your Google Places API key under Advanced (bottom of the page) to search.</div>';
     return;
   }
   resultsDiv.innerHTML = '<div class="search-result" style="cursor:default;">Searching…</div>';
@@ -933,7 +991,7 @@ async function bulkGeocode(){
   const status = document.getElementById('bulk-geocode-status');
   if(!key){
     status.style.color = 'var(--danger)';
-    status.textContent = 'Add your Google Places API key in the section below first.';
+    status.textContent = 'Add your Google Places API key under Advanced first.';
     return;
   }
   const lines = document.getElementById('bulk-geocode-box').value
@@ -1314,6 +1372,23 @@ function confirmRoute(){
 }
 
 /* ---------- Init ---------- */
+function applyThemeButtonLabel(){
+  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+  document.getElementById('theme-toggle').textContent = isDark ? 'Light mode' : 'Dark mode';
+}
+function toggleTheme(){
+  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+  if(isDark){
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem('wp_theme','light');
+  } else {
+    document.documentElement.setAttribute('data-theme','dark');
+    localStorage.setItem('wp_theme','dark');
+  }
+  applyThemeButtonLabel();
+}
+
+applyThemeButtonLabel();
 restoreLocal();
 restoreApiKey();
 renderPlaceList();
