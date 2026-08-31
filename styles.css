@@ -380,61 +380,6 @@
   }
   #advanced-panel .divider-label{margin-top:18px;}
 
-  .leg-alts{
-    margin:8px 0 4px;
-    padding:10px 10px 4px;
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:4px;
-  }
-  .leg-alts .leg-alts-label{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:10.5px;
-    color:var(--paper-dim);
-    text-transform:uppercase;
-    letter-spacing:0.05em;
-    margin-bottom:6px;
-  }
-  .alt-options{
-    display:flex;
-    gap:6px;
-    flex-wrap:wrap;
-    margin-bottom:6px;
-  }
-  .alt-btn{
-    background:var(--panel);
-    border:1px solid var(--line);
-    color:var(--paper);
-    font-family:'Work Sans',sans-serif;
-    font-size:12.5px;
-    padding:8px 10px;
-    border-radius:2px;
-    cursor:pointer;
-    text-align:left;
-    flex:1 1 120px;
-  }
-  .alt-btn.active{
-    border-color:var(--amber);
-    background:var(--panel);
-    box-shadow:inset 0 0 0 1px var(--amber);
-  }
-  .alt-btn .alt-title{font-weight:600;display:block;}
-  .alt-btn .alt-meta{font-size:11px;color:var(--paper-dim);display:block;margin-top:2px;}
-  .alt-btn.active .alt-meta{color:var(--amber);}
-  .alt-status{font-size:11.5px;color:var(--paper-dim);}
-
-  /* Alt-route pickers render into two possible spots — #leg-alts-left (in the
-     main column) and #leg-alts-mobile (under the map card) — and CSS picks
-     which one is visible per breakpoint so the same content can sit under the
-     stop list on the left on desktop, but under the map on mobile without
-     needing JS to physically move the element between two different parents. */
-  #leg-alts-left{display:none;}
-  #leg-alts-mobile{display:block;}
-  @media(min-width:960px){
-    #leg-alts-left{display:block;}
-    #leg-alts-mobile{display:none;}
-  }
-
   @media(min-width:600px){
     .theme-toggle{
       top:72px; right:20px;
