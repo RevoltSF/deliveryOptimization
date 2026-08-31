@@ -683,48 +683,71 @@ async function drawRoutePolyline(fit=false){
   // no waypoints in between. Google only offers alternate routes on a leg with
   // no intermediate stopovers, so this is what it takes to get alternates for
   // every individual gap rather than just the overall multi-stop trip. Cost:
-  // N stops -> N-1 calls per route build (vs. ~1 call under the old chunked
-  // multi-stop-leg approach) — paced gently to avoid hammering the API.
+  // N stops -> N-1 calls per route build (vs. ~1 call under a chunked
+  // multi-stop-leg approach).
   const segments = [];
   for(let i=0;i<fullSeq.length-1;i++){
     segments.push([fullSeq[i], fullSeq[i+1]]);
   }
 
-  const svc = new google.maps.DirectionsService();
-  let anyRoadFailure = false;
-  const choices = [];
-
-  for(const segPoints of segments){
-    if(myToken !== routeDrawToken) return; // a newer edit superseded this draw — abandon
-    const origin = {lat:segPoints[0].lat, lng:segPoints[0].lng};
-    const destination = {lat:segPoints[1].lat, lng:segPoints[1].lng};
-    let result = null;
-    let isFallback = false;
-    try{
-      result = await new Promise((resolve,reject)=>{
-        svc.route({
-          origin, destination,
-          travelMode: google.maps.TravelMode.DRIVING,
-          provideRouteAlternatives: true
-        }, (res,status)=>{
-          if(status==='OK') resolve(res); else reject(status);
-        });
-      });
-    }catch(err){
-      // No drivable route for this hop (e.g. overseas stop) — fall back to a
-      // straight line for just that hop rather than dropping it silently.
-      anyRoadFailure = true;
-      isFallback = true;
-    }
-    if(myToken !== routeDrawToken) return;
-    choices.push({points: segPoints, result, selected: 0, fallback: isFallback});
-    await new Promise(r=>setTimeout(r, 120)); // gentle pacing between per-hop requests
-  }
-
+  // Show something on the map immediately: a straight line per hop, upgraded
+  // to the real driving route as each Directions call resolves. Waiting for
+  // every hop to finish before drawing anything left the map blank for
+  // seconds on longer routes — this way the route's shape appears instantly
+  // and fills in road-by-road.
+  const choices = segments.map(segPoints => ({points: segPoints, result: null, selected: 0, fallback: true}));
   legRouteChoices = choices;
   redrawAllLegPolylines(fit);
+
+  const svc = new google.maps.DirectionsService();
+  let anyRoadFailure = false;
+
+  // Fetch hops with limited concurrency instead of one at a time: much faster
+  // wall-clock time on longer routes while still capping how many requests
+  // fire at once (Directions doesn't need one-at-a-time pacing the way a tight
+  // geocoding loop might, but an unbounded burst isn't ideal either).
+  const CONCURRENCY = 4;
+  let nextIndex = 0;
+
+  async function worker(){
+    while(true){
+      if(myToken !== routeDrawToken) return; // a newer edit superseded this draw — abandon
+      const i = nextIndex++;
+      if(i >= segments.length) return;
+      const segPoints = segments[i];
+      const origin = {lat:segPoints[0].lat, lng:segPoints[0].lng};
+      const destination = {lat:segPoints[1].lat, lng:segPoints[1].lng};
+      let result = null;
+      let isFallback = false;
+      try{
+        result = await new Promise((resolve,reject)=>{
+          svc.route({
+            origin, destination,
+            travelMode: google.maps.TravelMode.DRIVING,
+            provideRouteAlternatives: true
+          }, (res,status)=>{
+            if(status==='OK') resolve(res); else reject(status);
+          });
+        });
+      }catch(err){
+        // No drivable route for this hop (e.g. overseas stop) — keep the
+        // straight-line placeholder for just that hop rather than dropping it.
+        anyRoadFailure = true;
+        isFallback = true;
+      }
+      if(myToken !== routeDrawToken) return;
+      choices[i] = {points: segPoints, result, selected: 0, fallback: isFallback};
+      // Redraw as each hop lands so the route fills in progressively rather
+      // than popping in all at once at the end.
+      redrawAllLegPolylines();
+      renderLegAlternates();
+    }
+  }
+
+  await Promise.all(Array.from({length: Math.min(CONCURRENCY, segments.length)}, worker));
+  if(myToken !== routeDrawToken) return;
+
   setMapStatus(anyRoadFailure ? "Couldn't find a driving route between some stops — showing a straight line for those hops." : '');
-  renderLegAlternates();
 }
 
 // Draws routePolylines from legRouteChoices' current `selected` index per leg,
