@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Waypoint — Route Planner</title>
+<title>Route Optimizer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600;700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -73,7 +73,7 @@
   }
   .theme-toggle{
     position:absolute;
-    top:72px; right:20px;
+    top:83px; right:25px;
     background:var(--panel-2);
     border:1px solid var(--line);
     color:var(--paper);
@@ -85,10 +85,56 @@
     padding:7px 11px;
     cursor:pointer;
   }
-  main{
+  .layout{
     max-width:640px;
     margin:0 auto;
-    padding:20px;
+    padding:0 20px 20px;
+  }
+  main{
+    max-width:640px;
+    margin:0;
+    padding:20px 0;
+  }
+  .map-col{
+    padding:0 0 4px;
+  }
+  #map-canvas{
+    width:100%;
+    height:340px;
+    border-radius:2px;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+  }
+  #map-status{
+    font-size:12px;
+    color:var(--paper-dim);
+    margin-top:8px;
+  }
+  .map-legend{
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
+    font-size:11.5px;
+    color:var(--paper-dim);
+    margin-top:8px;
+  }
+  .map-legend span{display:inline-flex;align-items:center;gap:5px;}
+  .map-legend i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  @media(min-width:960px){
+    .layout{
+      max-width:1100px;
+      display:grid;
+      grid-template-columns:640px 1fr;
+      gap:24px;
+      align-items:start;
+      padding:0 20px 20px;
+    }
+    .map-col{
+      position:sticky;
+      top:20px;
+      padding-top:20px;
+    }
+    #map-canvas{height:calc(100vh - 160px);min-height:420px;}
   }
   .card{
     background:var(--panel);
@@ -257,14 +303,22 @@
     color:var(--amber);
     width:20px;
     flex-shrink:0;
+    align-self:flex-start;
+    padding-top:2px;
   }
   .stop-row .name{
     flex:1;
     font-size:14px;
     min-width:0;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    white-space:nowrap;
+    white-space:normal;
+    overflow-wrap:break-word;
+  }
+  .stop-row .name .addr{
+    display:block;
+    font-size:12px;
+    color:var(--paper-dim);
+    font-weight:400;
+    white-space:normal;
   }
   .stop-row .pin-flag{color:var(--amber);}
   .stop-row .mini-btn{
@@ -279,6 +333,7 @@
     padding:0;
     cursor:pointer;
     flex-shrink:0;
+    align-self:flex-start;
   }
   .stop-row .mini-btn:disabled{opacity:0.25;cursor:default;}
   .stop-row .mini-btn.rm-mini{color:var(--danger);}
@@ -334,6 +389,11 @@
   }
   #advanced-panel .divider-label{margin-top:18px;}
 
+  @media(min-width:600px){
+    .theme-toggle{
+      top:72px; right:20px;
+    }
+  }
 </style>
 <script>
   // Runs before paint so the page loads straight into the saved theme, no flash.
@@ -357,10 +417,11 @@
   </svg>
   <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()">Dark mode</button>
   <span class="eyebrow">Trip Ticket</span>
-  <h1>Waypoint</h1>
+  <h1>Route Optimizer</h1>
   <p>Pick your stops, get the shortest driving order, open it in Google Maps.</p>
 </header>
 
+<div class="layout">
 <main>
 
   <div id="refresh-banner" class="banner" style="display:none;">
@@ -408,7 +469,11 @@
     </div>
   </div>
 
-  <button class="btn-primary btn-block" style="padding:15px;font-size:15.5px;" onclick="buildRoute()">Get optimized route</button>
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--paper-dim);margin:2px 0 10px;">
+    <input type="checkbox" id="optimize-driving" style="width:16px;height:16px;accent-color:var(--amber);">
+    Optimize by driving time (uses Distance Matrix API — slower, more accurate than straight-line)
+  </label>
+  <button id="build-route-btn" class="btn-primary btn-block" style="padding:15px;font-size:15.5px;" onclick="buildRoute()">Get optimized route</button>
 
   <div class="card" id="route-output">
     <h2><span class="eyebrow">05</span> Review & adjust order</h2>
@@ -465,6 +530,21 @@
 
 </main>
 
+<aside class="map-col">
+  <div class="card">
+    <h2><span class="eyebrow">Map</span> Live map</h2>
+    <div id="map-canvas"></div>
+    <div class="map-legend">
+      <span><i style="background:var(--amber);"></i> checked place</span>
+      <span><i style="background:var(--teal);"></i> start</span>
+      <span><i style="background:var(--amber);border-radius:0;width:14px;height:3px;"></i> route</span>
+    </div>
+    <div id="map-status">Add your Google Places API key under Advanced to enable the live map.</div>
+  </div>
+</aside>
+
+</div>
+
 <script>
 /* ---------- In-memory app state, cached to localStorage as a safety net ---------- */
 const LS_STATE = 'wp_app_state_cache';
@@ -479,6 +559,7 @@ const LS_API_KEY = 'wp_google_api_key';
 function onApiKeyInput(value){
   googleApiKey = value.trim();
   try{ localStorage.setItem(LS_API_KEY, googleApiKey); }catch(e){ console.error('Save failed:', e); }
+  ensureMapLoaded();
 }
 function restoreApiKey(){
   try{
@@ -716,6 +797,8 @@ function clearAllData(){
     renderPlaceList();
     renderSavedStarts();
     checkRefreshBanner();
+    syncMapMarkers();
+    clearRoutePolyline();
   }
 }
 
@@ -754,6 +837,7 @@ function renderPlaceList(){
       <button class="rm" onclick="removePlace('${p.id}')">✕</button>
     </div>
   `).join('');
+  syncMapMarkers();
 }
 
 function setPinOrder(id, value){
@@ -964,6 +1048,203 @@ async function lookupPlace(key, query){
   }
 }
 
+/* ---------- Live map ----------
+   Loads the Maps JavaScript API on demand once a key is present (it's a separate
+   API from Places, but usually enabled on the same project/key), then keeps a
+   plain marker per place plus one for the start point. syncMapMarkers() is cheap
+   enough to just call after every state change instead of tracking diffs. */
+let gMap = null;
+let mapMarkers = [];
+let startMarker = null;
+let routePolylines = [];
+let routeDrawToken = 0;
+let mapsLoadState = 'idle'; // idle | loading | ready | error
+
+function setMapStatus(text){
+  const el = document.getElementById('map-status');
+  if(el) el.textContent = text;
+}
+
+// Reads the live CSS custom property so marker/route colors always match the
+// current theme (light/dark) instead of a color baked in at draw time.
+function getCssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function ensureMapLoaded(){
+  if(mapsLoadState==='ready' || mapsLoadState==='loading') return;
+  if(!googleApiKey){
+    setMapStatus('Add your Google Places API key under Advanced to enable the live map.');
+    return;
+  }
+  mapsLoadState = 'loading';
+  setMapStatus('Loading map…');
+  window.__onMapsReady = initMap;
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(googleApiKey)}&callback=__onMapsReady`;
+  script.async = true;
+  script.onerror = ()=>{
+    mapsLoadState = 'error';
+    setMapStatus('Could not load Google Maps — check that Maps JavaScript API is enabled for this key.');
+  };
+  document.head.appendChild(script);
+}
+
+function initMap(){
+  mapsLoadState = 'ready';
+  setMapStatus('');
+  const center = getSearchBias() || {lat:39.8283, lng:-98.5795}; // fallback: roughly center of the US
+  gMap = new google.maps.Map(document.getElementById('map-canvas'), {
+    center, zoom:11, mapTypeControl:false, streetViewControl:false, fullscreenControl:false
+  });
+  syncMapMarkers();
+}
+
+// Maps each checked place's id to its stop number: follows the current pending
+// route order once one's been built, otherwise falls back to list order. Any
+// checked place not yet part of a built route (e.g. checked after the fact)
+// gets the next number after the route so every dot still gets one.
+function currentStopNumbers(){
+  const checked = loadPlaces().filter(p=>p.checked);
+  const numberMap = {};
+  if(pendingOrder && pendingOrder.length>0){
+    pendingOrder.forEach((p,i)=>{ numberMap[p.id] = i+1; });
+    let next = pendingOrder.length+1;
+    checked.forEach(p=>{ if(!(p.id in numberMap)) numberMap[p.id] = next++; });
+  } else {
+    checked.forEach((p,i)=>{ numberMap[p.id] = i+1; });
+  }
+  return numberMap;
+}
+
+// Redraws every marker from current state. Called after any place/check/start
+// change so the map is always live — never holds onto stale positions. Only
+// checked places get a marker; unchecked ones stay off the map entirely. Each
+// dot is labeled with its stop number so it matches the route list below.
+function syncMapMarkers(){
+  if(!gMap) return;
+  mapMarkers.forEach(m=>m.setMap(null));
+  mapMarkers = [];
+  if(startMarker){ startMarker.setMap(null); startMarker = null; }
+
+  const checkedColor = getCssVar('--amber');
+  const startColor = getCssVar('--teal');
+  const numberMap = currentStopNumbers();
+  const bounds = new google.maps.LatLngBounds();
+  let any = false;
+
+  loadPlaces().filter(p=>p.checked).forEach(p=>{
+    if(isNaN(p.lat) || isNaN(p.lng)) return;
+    const marker = new google.maps.Marker({
+      position:{lat:p.lat, lng:p.lng},
+      map:gMap,
+      title:p.name,
+      label:{text:String(numberMap[p.id]), color:'#ffffff', fontSize:'11px', fontWeight:'700'},
+      icon:{
+        path:google.maps.SymbolPath.CIRCLE,
+        scale:10,
+        fillColor:checkedColor,
+        fillOpacity:1,
+        strokeColor:'#f3eddb',
+        strokeWeight:1.5
+      }
+    });
+    mapMarkers.push(marker);
+    bounds.extend(marker.getPosition());
+    any = true;
+  });
+
+  if(startLocation){
+    startMarker = new google.maps.Marker({
+      position:{lat:startLocation.lat, lng:startLocation.lng},
+      map:gMap,
+      title:`Start: ${startLocation.label}`,
+      label:{text:'S', color:'#ffffff', fontSize:'11px', fontWeight:'700'},
+      icon:{
+        path:google.maps.SymbolPath.CIRCLE,
+        scale:10,
+        fillColor:startColor,
+        fillOpacity:1,
+        strokeColor:'#f3eddb',
+        strokeWeight:1.5
+      },
+      zIndex:999
+    });
+    bounds.extend(startMarker.getPosition());
+    any = true;
+  }
+
+  if(any) gMap.fitBounds(bounds, 60);
+}
+
+/* ---------- Route polyline (actual driving roads) ----------
+   Uses the Directions service so the line follows real streets instead of a
+   straight line. Chunked into legs of <=24 stops (origin+waypoints+destination)
+   to stay under the Directions API's 25-stop-per-request cap, mirroring the
+   leg-splitting already used for the Google Maps deep link in confirmRoute(). */
+function clearRoutePolyline(){
+  routePolylines.forEach(p=>p.setMap(null));
+  routePolylines = [];
+}
+
+async function drawRoutePolyline(){
+  const myToken = ++routeDrawToken;
+  clearRoutePolyline();
+  if(!gMap || mapsLoadState!=='ready' || !startLocation || pendingOrder.length===0) return;
+
+  const fullSeq = [
+    {lat:startLocation.lat, lng:startLocation.lng},
+    ...pendingOrder.map(s=>({lat:s.lat, lng:s.lng}))
+  ];
+  const MAX_PER_LEG = 24; // origin + up to 22 waypoints + destination, safely under the API's 25-stop cap
+  const legs = [];
+  let i=0;
+  while(i < fullSeq.length-1){
+    legs.push(fullSeq.slice(i, Math.min(i+MAX_PER_LEG, fullSeq.length)));
+    i += MAX_PER_LEG-1;
+  }
+
+  const svc = new google.maps.DirectionsService();
+  const routeColor = getCssVar('--amber');
+  const bounds = new google.maps.LatLngBounds();
+  const newPolylines = [];
+  let anyRoadFailure = false;
+
+  for(const legPoints of legs){
+    if(myToken !== routeDrawToken) return; // a newer edit superseded this draw — abandon
+    const origin = legPoints[0];
+    const destination = legPoints[legPoints.length-1];
+    const waypoints = legPoints.slice(1,-1).map(p=>({location:p, stopover:true}));
+    let path;
+    let isFallback = false;
+    try{
+      const result = await new Promise((resolve,reject)=>{
+        svc.route({origin, destination, waypoints, travelMode: google.maps.TravelMode.DRIVING}, (res,status)=>{
+          if(status==='OK') resolve(res); else reject(status);
+        });
+      });
+      path = [];
+      result.routes[0].legs.forEach(l=> l.steps.forEach(s=> path.push(...s.path)) );
+    }catch(err){
+      // No drivable route for this leg (e.g. overseas stop) — fall back to a
+      // straight line for just that leg rather than dropping it silently.
+      anyRoadFailure = true;
+      isFallback = true;
+      path = legPoints.map(p=>({lat:p.lat, lng:p.lng}));
+    }
+    if(myToken !== routeDrawToken) return;
+    const poly = new google.maps.Polyline({
+      path, geodesic:isFallback, strokeColor:routeColor, strokeOpacity:0.9, strokeWeight:4, map:gMap
+    });
+    newPolylines.push(poly);
+    path.forEach(pt=>bounds.extend(pt));
+  }
+
+  routePolylines = newPolylines;
+  if(!bounds.isEmpty()) gMap.fitBounds(bounds, 60);
+  setMapStatus(anyRoadFailure ? "Couldn't find a driving route for part of this trip — showing a straight line for that stretch." : '');
+}
+
 /* ---------- Places Autocomplete (manual add + start search) ---------- */
 let autocompleteTimer;
 function wirePlaceSearch(inputId, resultsId, onSelect){
@@ -1086,6 +1367,7 @@ wirePlaceSearch('start-search','start-search-results', (place)=>{
   document.getElementById('start-search').value='';
   document.getElementById('start-search-results').innerHTML='';
   document.getElementById('saved-start-select').value = '';
+  syncMapMarkers();
 });
 
 function useCurrentLocation(){
@@ -1096,6 +1378,7 @@ function useCurrentLocation(){
     startLocation = {lat: pos.coords.latitude, lng: pos.coords.longitude, label:'Current location'};
     status.textContent = `Start: current location (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`;
     document.getElementById('saved-start-select').value = '';
+    syncMapMarkers();
   }, err=>{
     status.textContent = 'Could not get your location — check browser permissions.';
   });
@@ -1128,6 +1411,7 @@ function selectSavedStart(id){
   startLocation = {lat: p.lat, lng: p.lng, label: p.label};
   document.getElementById('start-status').textContent = `Start: ${p.label}`;
   document.getElementById('saved-start-select').value = id;
+  syncMapMarkers();
 }
 
 function removeSavedStart(id){
@@ -1156,7 +1440,9 @@ function saveCurrentStart(){
   renderSavedStarts();
 }
 
-/* ---------- Route optimization (nearest-neighbor + 2-opt) ---------- */
+/* ---------- Route optimization (nearest-neighbor + 2-opt) ----------
+   dist(a,b) is pluggable: haversine (straight-line, default) or a driving-time
+   lookup built from the Distance Matrix API when "optimize by driving time" is on. */
 function haversine(a,b){
   const R=6371;
   const dLat=(b.lat-a.lat)*Math.PI/180;
@@ -1166,14 +1452,14 @@ function haversine(a,b){
   return 2*R*Math.asin(Math.sqrt(h));
 }
 
-function nearestNeighborOrder(start, stops){
+function nearestNeighborOrder(start, stops, dist=haversine){
   const remaining = [...stops];
   const order = [];
   let current = start;
   while(remaining.length){
     let bestIdx=0, bestDist=Infinity;
     remaining.forEach((s,i)=>{
-      const d = haversine(current, s);
+      const d = dist(current, s);
       if(d<bestDist){bestDist=d; bestIdx=i;}
     });
     const next = remaining.splice(bestIdx,1)[0];
@@ -1183,20 +1469,20 @@ function nearestNeighborOrder(start, stops){
   return order;
 }
 
-function routeLength(start, order){
+function routeLength(start, order, dist=haversine){
   let total=0, prev=start;
-  order.forEach(s=>{ total+=haversine(prev,s); prev=s; });
+  order.forEach(s=>{ total+=dist(prev,s); prev=s; });
   return total;
 }
 
-function twoOpt(start, order){
+function twoOpt(start, order, dist=haversine){
   let improved = true;
   while(improved){
     improved = false;
     for(let i=0;i<order.length-1;i++){
       for(let j=i+1;j<order.length;j++){
         const newOrder = order.slice(0,i).concat(order.slice(i,j+1).reverse(), order.slice(j+1));
-        if(routeLength(start,newOrder) < routeLength(start,order) - 1e-6){
+        if(routeLength(start,newOrder,dist) < routeLength(start,order,dist) - 1e-6){
           order = newOrder;
           improved = true;
         }
@@ -1208,8 +1494,8 @@ function twoOpt(start, order){
 
 // Given a fixed skeleton of pinned stops (in absolute slot order), thread the
 // remaining unpinned stops into the open slots between/after them, always
-// choosing whichever unpinned stop is nearest to the current point in the walk.
-function computeOrder(){
+// choosing whichever unpinned stop is nearest (by dist) to the current point in the walk.
+function computeOrder(dist=haversine){
   const allChecked = loadPlaces().filter(p=>p.checked);
   const pinned = allChecked.filter(p=>p.pinOrder!=null).sort((a,b)=>a.pinOrder-b.pinOrder);
   const unpinned = allChecked.filter(p=>p.pinOrder==null);
@@ -1234,7 +1520,7 @@ function computeOrder(){
       let current = refPoint;
       while(remaining.length){
         let bestIdx=0, bestDist=Infinity;
-        remaining.forEach((p,idx)=>{ const d=haversine(current,p); if(d<bestDist){bestDist=d; bestIdx=idx;} });
+        remaining.forEach((p,idx)=>{ const d=dist(current,p); if(d<bestDist){bestDist=d; bestIdx=idx;} });
         const next = remaining.splice(bestIdx,1)[0];
         resolved.push(next);
         current = next;
@@ -1256,7 +1542,7 @@ function computeOrder(){
       const gap = a.slot - prevSlot - 1; // open unpinned slots before this anchor
       for(let i=0;i<gap && available.length;i++){
         let bestIdx=0, bestDist=Infinity;
-        available.forEach((s,idx)=>{ const d=haversine(current,s); if(d<bestDist){bestDist=d; bestIdx=idx;} });
+        available.forEach((s,idx)=>{ const d=dist(current,s); if(d<bestDist){bestDist=d; bestIdx=idx;} });
         const next = available.splice(bestIdx,1)[0];
         finalOrder[prevSlot+i] = next;
         current = next;
@@ -1269,7 +1555,7 @@ function computeOrder(){
     let idx = prevSlot;
     while(available.length){
       let bestIdx=0, bestDist=Infinity;
-      available.forEach((s,i)=>{ const d=haversine(current,s); if(d<bestDist){bestDist=d; bestIdx=i;} });
+      available.forEach((s,i)=>{ const d=dist(current,s); if(d<bestDist){bestDist=d; bestIdx=i;} });
       const next = available.splice(bestIdx,1)[0];
       finalOrder[idx] = next;
       current = next;
@@ -1279,10 +1565,70 @@ function computeOrder(){
     const hadTies = pinnedSorted.some((p,idx)=> idx>0 && p.pinOrder===pinnedSorted[idx-1].pinOrder);
     pinNote = `<div class="pin-note">${pinned.length} stop(s) locked to their exact position.${hadTies ? ' Some pins shared the same slot number, so ties were broken by picking whichever was closer to the previous stop.' : ''} Adjust freely below before confirming.</div>`;
   } else {
-    order = nearestNeighborOrder(startLocation, allChecked);
-    if(order.length<=12) order = twoOpt(startLocation, order);
+    order = nearestNeighborOrder(startLocation, allChecked, dist);
+    if(order.length<=12) order = twoOpt(startLocation, order, dist);
   }
   return {order, pinNote};
+}
+
+/* ---------- Driving-time matrix (optional optimization mode) ----------
+   Builds a duration lookup between the start point and every checked place using
+   the Distance Matrix service, chunked into <=10x10 blocks per request (the
+   service's element-count limit). Returns null on any failure so the caller can
+   fall back to straight-line distance. */
+async function fetchDrivingMatrix(points){
+  if(mapsLoadState!=='ready') return null;
+  const svc = new google.maps.DistanceMatrixService();
+  const CHUNK = 10;
+  const durations = {};
+  points.forEach(p=>{ durations[p.id] = {}; });
+
+  for(let i=0;i<points.length;i+=CHUNK){
+    const originsChunk = points.slice(i, i+CHUNK);
+    for(let j=0;j<points.length;j+=CHUNK){
+      const destChunk = points.slice(j, j+CHUNK);
+      let result;
+      try{
+        result = await new Promise((resolve,reject)=>{
+          svc.getDistanceMatrix({
+            origins: originsChunk.map(p=>({lat:p.lat,lng:p.lng})),
+            destinations: destChunk.map(p=>({lat:p.lat,lng:p.lng})),
+            travelMode: google.maps.TravelMode.DRIVING
+          }, (res,status)=>{
+            if(status==='OK') resolve(res); else reject(status);
+          });
+        });
+      }catch(err){
+        return null;
+      }
+      result.rows.forEach((row,ri)=>{
+        row.elements.forEach((el,ci)=>{
+          const originId = originsChunk[ri].id;
+          const destId = destChunk[ci].id;
+          durations[originId][destId] = (el.status==='OK') ? el.duration.value : null;
+        });
+      });
+      await new Promise(r=>setTimeout(r,120)); // gentle pacing between chunk requests
+    }
+  }
+
+  return {
+    getDuration(idA, idB){
+      if(idA===idB) return 0;
+      const v = durations[idA] && durations[idA][idB];
+      return (v==null) ? null : v;
+    }
+  };
+}
+
+// Builds a dist(a,b) function backed by the driving matrix, falling back to
+// haversine for any pair the matrix couldn't resolve (e.g. no driving route).
+function drivingDistFn(matrix){
+  const idOf = o => o.id || 'start';
+  return (a,b)=>{
+    const d = matrix.getDuration(idOf(a), idOf(b));
+    return d==null ? haversine(a,b)*1000 : d;
+  };
 }
 
 /* ---------- Review / adjust / confirm step ---------- */
@@ -1290,7 +1636,7 @@ let pendingOrder = [];   // the order currently shown for editing
 let lastComputedOrder = []; // freshly optimized order, for "reset"
 let currentPinNote = '';
 
-function buildRoute(){
+async function buildRoute(){
   const allChecked = loadPlaces().filter(p=>p.checked);
   const outputCard = document.getElementById('route-output');
   if(allChecked.length===0){
@@ -1302,7 +1648,30 @@ function buildRoute(){
     return;
   }
 
-  const {order, pinNote} = computeOrder();
+  const useDriving = document.getElementById('optimize-driving')?.checked;
+  const buildBtn = document.getElementById('build-route-btn');
+  let dist = haversine;
+
+  if(useDriving){
+    if(mapsLoadState!=='ready'){
+      alert("The map (and its driving-time lookup) isn't ready yet — add your API key under Advanced and let the map load, or uncheck \"optimize by driving time\".");
+      return;
+    }
+    if(buildBtn){ buildBtn.disabled = true; buildBtn.textContent = 'Calculating driving times…'; }
+    const points = [
+      {id:'start', lat:startLocation.lat, lng:startLocation.lng},
+      ...allChecked.map(p=>({id:p.id, lat:p.lat, lng:p.lng}))
+    ];
+    const matrix = await fetchDrivingMatrix(points);
+    if(buildBtn){ buildBtn.disabled = false; buildBtn.textContent = 'Get optimized route'; }
+    if(matrix){
+      dist = drivingDistFn(matrix);
+    } else {
+      alert("Couldn't fetch driving times (API error or quota) — optimizing by straight-line distance instead.");
+    }
+  }
+
+  const {order, pinNote} = computeOrder(dist);
   pendingOrder = order.slice();
   lastComputedOrder = order.slice();
   currentPinNote = pinNote;
@@ -1329,7 +1698,7 @@ function renderEditableOrder(){
   const stopRows = pendingOrder.map((s,i)=>`
     <div class="stop-row">
       <span class="n">${i+1}</span>
-      <span class="name">${escapeHtml(s.name)}${s.address ? ` <span style="color:var(--paper-dim);font-weight:400;">(${escapeHtml(s.address)})</span>` : ''}${s.pinOrder!=null?' <span class="pin-flag">📌</span>':''}</span>
+      <span class="name">${escapeHtml(s.name)}${s.pinOrder!=null?' <span class="pin-flag">📌</span>':''}${s.address ? `<span class="addr">${escapeHtml(s.address)}</span>` : ''}</span>
       <button class="mini-btn" onclick="movePendingStop(${i},-1)" ${i===0?'disabled':''} title="Move earlier">↑</button>
       <button class="mini-btn" onclick="movePendingStop(${i},1)" ${i===pendingOrder.length-1?'disabled':''} title="Move later">↓</button>
       <button class="mini-btn rm-mini" onclick="removePendingStop(${i})" title="Drop this stop">✕</button>
@@ -1341,6 +1710,9 @@ function renderEditableOrder(){
   document.getElementById('legs-container').innerHTML = '';
   document.getElementById('legs-note').textContent = '';
   document.getElementById('confirmed-badge').classList.remove('show');
+
+  drawRoutePolyline();
+  syncMapMarkers();
 }
 
 function movePendingStop(i, dir){
@@ -1424,6 +1796,8 @@ function toggleTheme(){
     localStorage.setItem('wp_theme','dark');
   }
   applyThemeButtonLabel();
+  syncMapMarkers();
+  drawRoutePolyline();
 }
 
 applyThemeButtonLabel();
@@ -1432,6 +1806,7 @@ restoreApiKey();
 renderPlaceList();
 renderSavedStarts();
 checkRefreshBanner();
+ensureMapLoaded();
 </script>
 
 </body>
