@@ -575,8 +575,8 @@ function currentStopNumbers(){
 // dot is labeled with its stop number so it matches the route list below.
 // By default this does NOT move the viewport — only pass fit=true for changes
 // that genuinely warrant re-framing (first load, a new start point, a freshly
-// built route). Otherwise routine edits (check/uncheck, reorder, alt-route
-// pick, theme toggle) would keep yanking the zoom back out.
+// built route). Otherwise routine edits (check/uncheck, reorder, theme
+// toggle) would keep yanking the zoom back out.
 function syncMapMarkers(fit=false){
   if(!gMap) return;
   mapMarkers.forEach(m=>m.setMap(null));
@@ -636,55 +636,27 @@ function syncMapMarkers(fit=false){
 /* ---------- Route polyline (actual driving roads) ----------
    Uses the Directions service so the line follows real streets instead of a
    straight line. Draws one segment per consecutive stop-to-stop hop (start->stop1,
-   stop1->stop2, ...) rather than one call covering the whole multi-stop trip —
-   Google only returns alternate routes on a Directions call with no waypoints
-   in between, so per-hop segments are what it takes to offer alternates
-   between every individual pair of stops. This means N stops costs N-1
-   Directions calls per route build, versus ~1 call under a chunked multi-stop
-   approach — a real increase, paced with a short delay between requests.
-
-   legRouteChoices[] caches each hop's raw DirectionsResult + which alternative
-   index is currently drawn, so switching alternatives via the UI never
-   re-fetches — only a genuine reorder, stop add/remove, or rebuild triggers
-   new Directions calls. */
+   stop1->stop2, ...) so a road-drawing failure on one hop only falls back to a
+   straight line for that hop instead of the whole trip. */
 function clearRoutePolyline(){
   routePolylines.forEach(p=>p.setMap(null));
   routePolylines = [];
 }
 
-// One entry per stop-to-stop hop: {points: [from,to] (each with lat/lng/label), result (raw DirectionsResult or null), selected (index into result.routes), fallback (bool)}
+// One entry per stop-to-stop hop: {points: [from,to] (each with lat/lng), result (raw DirectionsResult or null), fallback (bool)}
 let legRouteChoices = [];
-
-function legDistanceLabel(route){
-  let meters=0, seconds=0;
-  route.legs.forEach(l=>{ meters += l.distance?.value||0; seconds += l.duration?.value||0; });
-  const miles = (meters/1609.34).toFixed(1);
-  const mins = Math.round(seconds/60);
-  const hrs = Math.floor(mins/60), remMins = mins%60;
-  const timeStr = hrs>0 ? `${hrs}h ${remMins}m` : `${mins} min`;
-  return `${miles} mi · ${timeStr}`;
-}
 
 async function drawRoutePolyline(fit=false){
   const myToken = ++routeDrawToken;
   clearRoutePolyline();
   legRouteChoices = [];
-  renderLegAlternates(); // clear any stale alt-picker UI while we recompute
   if(!gMap || mapsLoadState!=='ready' || !startLocation || pendingOrder.length===0) return;
 
-  // One named stop per point in the full sequence (start + every checked place),
-  // used only for segment labels in the alt-picker.
   const fullSeq = [
-    {lat:startLocation.lat, lng:startLocation.lng, label: startLocation.label},
-    ...pendingOrder.map(s=>({lat:s.lat, lng:s.lng, label: s.name}))
+    {lat:startLocation.lat, lng:startLocation.lng},
+    ...pendingOrder.map(s=>({lat:s.lat, lng:s.lng}))
   ];
 
-  // Segment-per-pair: one Directions call per consecutive stop-to-stop hop, with
-  // no waypoints in between. Google only offers alternate routes on a leg with
-  // no intermediate stopovers, so this is what it takes to get alternates for
-  // every individual gap rather than just the overall multi-stop trip. Cost:
-  // N stops -> N-1 calls per route build (vs. ~1 call under a chunked
-  // multi-stop-leg approach).
   const segments = [];
   for(let i=0;i<fullSeq.length-1;i++){
     segments.push([fullSeq[i], fullSeq[i+1]]);
@@ -695,7 +667,7 @@ async function drawRoutePolyline(fit=false){
   // every hop to finish before drawing anything left the map blank for
   // seconds on longer routes — this way the route's shape appears instantly
   // and fills in road-by-road.
-  const choices = segments.map(segPoints => ({points: segPoints, result: null, selected: 0, fallback: true}));
+  const choices = segments.map(segPoints => ({points: segPoints, result: null, fallback: true}));
   legRouteChoices = choices;
   redrawAllLegPolylines(fit);
 
@@ -704,8 +676,7 @@ async function drawRoutePolyline(fit=false){
 
   // Fetch hops with limited concurrency instead of one at a time: much faster
   // wall-clock time on longer routes while still capping how many requests
-  // fire at once (Directions doesn't need one-at-a-time pacing the way a tight
-  // geocoding loop might, but an unbounded burst isn't ideal either).
+  // fire at once.
   const CONCURRENCY = 4;
   let nextIndex = 0;
 
@@ -723,8 +694,7 @@ async function drawRoutePolyline(fit=false){
         result = await new Promise((resolve,reject)=>{
           svc.route({
             origin, destination,
-            travelMode: google.maps.TravelMode.DRIVING,
-            provideRouteAlternatives: true
+            travelMode: google.maps.TravelMode.DRIVING
           }, (res,status)=>{
             if(status==='OK') resolve(res); else reject(status);
           });
@@ -736,11 +706,10 @@ async function drawRoutePolyline(fit=false){
         isFallback = true;
       }
       if(myToken !== routeDrawToken) return;
-      choices[i] = {points: segPoints, result, selected: 0, fallback: isFallback};
+      choices[i] = {points: segPoints, result, fallback: isFallback};
       // Redraw as each hop lands so the route fills in progressively rather
       // than popping in all at once at the end.
       redrawAllLegPolylines();
-      renderLegAlternates();
     }
   }
 
@@ -750,10 +719,9 @@ async function drawRoutePolyline(fit=false){
   setMapStatus(anyRoadFailure ? "Couldn't find a driving route between some stops — showing a straight line for those hops." : '');
 }
 
-// Draws routePolylines from legRouteChoices' current `selected` index per leg,
-// without touching the network — used both after a fresh fetch and whenever the
-// user clicks a different alternate. Does NOT move the viewport unless fit=true
-// is passed — alt-route picks and theme toggles just redraw in place.
+// Draws routePolylines from legRouteChoices, without touching the network —
+// used both after a fresh fetch and after a theme toggle re-tint. Does NOT
+// move the viewport unless fit=true is passed.
 function redrawAllLegPolylines(fit=false){
   clearRoutePolyline();
   const routeColor = getCssVar('--amber');
@@ -762,7 +730,7 @@ function redrawAllLegPolylines(fit=false){
     let path;
     let geodesic = false;
     if(choice.result){
-      const route = choice.result.routes[choice.selected] || choice.result.routes[0];
+      const route = choice.result.routes[0];
       path = [];
       route.legs.forEach(l=> l.steps.forEach(s=> path.push(...s.path)) );
     } else {
@@ -776,51 +744,6 @@ function redrawAllLegPolylines(fit=false){
     path.forEach(pt=>b.extend(pt));
   });
   if(fit && !b.isEmpty() && gMap) gMap.fitBounds(b, 60);
-}
-
-// Renders one alt-picker block per hop that actually got more than one route
-// back from Google. Since every hop is now a plain point-to-point Directions
-// call (no waypoints), most hops should offer 2-3 alternatives; a hop with
-// only one option (e.g. a rural stretch with no real alternate road) just
-// shows nothing to pick between. Writes the same markup into both
-// #leg-alts-left (shown on desktop, left column) and #leg-alts-mobile (shown
-// under the map on narrow screens) — CSS decides which one is visible.
-function renderLegAlternates(){
-  const targets = ['leg-alts-left','leg-alts-mobile']
-    .map(id=>document.getElementById(id))
-    .filter(Boolean);
-  if(targets.length===0) return;
-  if(legRouteChoices.length===0){ targets.forEach(t=>t.innerHTML=''); return; }
-
-  const blocks = legRouteChoices.map((choice, legIdx)=>{
-    if(!choice.result || choice.result.routes.length<2) return '';
-    const fromLabel = escapeHtml(choice.points[0].label || 'Start');
-    const toLabel = escapeHtml(choice.points[1].label || 'Stop');
-    const btns = choice.result.routes.map((route, ri)=>{
-      const summary = route.summary ? escapeHtml(route.summary) : `Option ${ri+1}`;
-      return `<button class="alt-btn ${ri===choice.selected?'active':''}" onclick="selectLegAlternate(${legIdx}, ${ri})">
-        <span class="alt-title">${summary}</span>
-        <span class="alt-meta">${legDistanceLabel(route)}</span>
-      </button>`;
-    }).join('');
-    return `<div class="leg-alts">
-      <div class="leg-alts-label">${fromLabel} → ${toLabel}</div>
-      <div class="alt-options">${btns}</div>
-    </div>`;
-  }).join('');
-
-  const html = blocks || '<div class="alt-status">No alternate routes found between any of your stops for this trip.</div>';
-  targets.forEach(t=>{ t.innerHTML = html; });
-}
-
-// User picked a different alternate for one leg. No network call — just redraw
-// from the already-cached DirectionsResult for that leg.
-function selectLegAlternate(legIdx, routeIdx){
-  const choice = legRouteChoices[legIdx];
-  if(!choice || !choice.result || !choice.result.routes[routeIdx]) return;
-  choice.selected = routeIdx;
-  redrawAllLegPolylines();
-  renderLegAlternates();
 }
 
 /* ---------- Places Autocomplete (manual add + start search) ---------- */
