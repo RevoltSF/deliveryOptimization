@@ -96,6 +96,8 @@
     </div>
     <button class="btn-primary btn-block" style="margin-top:14px;padding:14px;font-size:15px;" onclick="confirmRoute()">✓ Confirm route & get map link</button>
     <div id="confirmed-badge" class="confirmed-badge"></div>
+    <button id="share-route-btn" class="btn-secondary btn-block" style="margin-top:10px;display:none;" onclick="shareRoute()">▣ Share route via QR</button>
+    <div id="share-route-area" class="share-route-area"></div>
     <div id="legs-note" style="font-size:12.5px;color:var(--paper-dim);margin-top:10px;"></div>
     <div id="legs-container"></div>
   </div>
@@ -157,6 +159,8 @@
 
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="script.js" defer></script>
 
 </body>
