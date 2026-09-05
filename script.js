@@ -1136,6 +1136,9 @@ function drivingDistFn(matrix){
 let pendingOrder = [];   // the order currently shown for editing
 let lastComputedOrder = []; // freshly optimized order, for "reset"
 let currentPinNote = '';
+const MAX_STOPS_PER_LEG = 10;
+let confirmedLegs = [];
+let sharedRouteLoaded = false;
 
 async function buildRoute(){
   const allChecked = loadPlaces().filter(p=>p.checked);
@@ -1181,6 +1184,9 @@ async function buildRoute(){
   document.getElementById('legs-container').innerHTML = '';
   document.getElementById('legs-note').textContent = '';
   document.getElementById('confirmed-badge').classList.remove('show');
+  const shareBtn = document.getElementById('share-route-btn');
+  if(shareBtn) shareBtn.style.display = 'none';
+  clearShareArea();
 
   renderEditableOrder(true); // fresh build: okay to re-frame the map to the new route
   outputCard.classList.add('show');
@@ -1214,6 +1220,9 @@ function renderEditableOrder(fit=false){
   document.getElementById('legs-container').innerHTML = '';
   document.getElementById('legs-note').textContent = '';
   document.getElementById('confirmed-badge').classList.remove('show');
+  const shareBtn = document.getElementById('share-route-btn');
+  if(shareBtn) shareBtn.style.display = 'none';
+  clearShareArea();
 
   drawRoutePolyline(fit);
   syncMapMarkers(fit);
@@ -1236,55 +1245,290 @@ function resetToOptimized(){
   renderEditableOrder();
 }
 
+function splitRouteIntoLegs(sequence){
+  const legs = [];
+  let i = 0;
+  while(i < sequence.length - 1){
+    const legPoints = sequence.slice(i, Math.min(i + MAX_STOPS_PER_LEG, sequence.length));
+    legs.push(legPoints);
+    i += MAX_STOPS_PER_LEG - 1;
+  }
+  return legs;
+}
+
+function makeGoogleMapsUrl(legPoints){
+  const origin = `${legPoints[0].lat},${legPoints[0].lng}`;
+  const destination = `${legPoints[legPoints.length-1].lat},${legPoints[legPoints.length-1].lng}`;
+  const mid = legPoints.slice(1,-1).map(s=>`${s.lat},${s.lng}`).join('|');
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`;
+  if(mid) url += `&waypoints=${encodeURIComponent(mid)}`;
+  return url;
+}
+
+function routePayloadFromCurrent(){
+  return {
+    v: 1,
+    start: {
+      label: startLocation?.label || 'Start',
+      lat: Number(startLocation?.lat),
+      lng: Number(startLocation?.lng)
+    },
+    stops: pendingOrder.map(s=>({
+      name: s.name || 'Stop',
+      address: s.address || '',
+      lat: Number(s.lat),
+      lng: Number(s.lng)
+    }))
+  };
+}
+
+function bytesToBase64Url(bytes){
+  let binary = '';
+  const chunk = 0x8000;
+  for(let i=0;i<bytes.length;i+=chunk){
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+function base64UrlToBytes(str){
+  const padded = str.replace(/-/g,'+').replace(/_/g,'/') + '='.repeat((4 - str.length % 4) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function encodeRoutePayload(payload){
+  const raw = JSON.stringify(payload);
+
+  // LZ-string's URI-safe encoding is much smaller than raw/base64 JSON,
+  // which makes the resulting QR substantially easier for phones to scan.
+  if(window.LZString){
+    return LZString.compressToEncodedURIComponent(raw);
+  }
+
+  // Fallback if the CDN library is unavailable.
+  return bytesToBase64Url(new TextEncoder().encode(raw));
+}
+
+function decodeRoutePayload(encoded){
+  try{
+    let raw;
+    if(window.LZString){
+      raw = LZString.decompressFromEncodedURIComponent(encoded);
+    }
+
+    if(!raw){
+      raw = new TextDecoder().decode(base64UrlToBytes(encoded));
+    }
+
+    return JSON.parse(raw);
+  }catch(err){
+    console.warn('Could not decode shared route:', err);
+    return null;
+  }
+}
+
+function getShareBaseUrl(){
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function makeShareUrl(payload){
+  return `${getShareBaseUrl()}#route=${encodeRoutePayload(payload)}`;
+}
+
+function clearShareArea(){
+  const area = document.getElementById('share-route-area');
+  if(area) area.innerHTML = '';
+}
+
+function renderQrInto(container, url){
+  if(!window.QRCode){
+    container.innerHTML = '<div style="padding:20px;font-size:12px;">QR generator unavailable.<br>Use the share link below.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  try{
+    new QRCode(container, {
+      text: url,
+      width: 192,
+      height: 192,
+      correctLevel: QRCode.CorrectLevel.L
+    });
+  }catch(err){
+    console.error('QR generation failed:', err);
+    container.textContent = 'QR code is too large for one code. Use the link below.';
+  }
+}
+
+function shareRoute(){
+  if(pendingOrder.length===0 || !startLocation){
+    alert('Build a route first.');
+    return;
+  }
+
+  const area = document.getElementById('share-route-area');
+  const btn = document.getElementById('share-route-btn');
+  if(!area) return;
+
+  const fullSeq = [startLocation, ...pendingOrder];
+  const legs = splitRouteIntoLegs(fullSeq);
+  const legUrls = legs.map(leg => makeGoogleMapsUrl(leg));
+
+  area.innerHTML = `
+    <div class="share-route-box">
+      <div class="share-route-title">Open route in Google Maps</div>
+      <div class="share-route-help">
+        ${legs.length === 1
+          ? 'Scan the QR code to open this route directly in Google Maps.'
+          : `This route requires ${legs.length} Google Maps legs. Each QR code opens its leg directly in Google Maps.`}
+      </div>
+      <div class="share-route-actions">
+        <button class="btn-secondary" type="button" id="copy-share-url-btn">Copy ${legs.length === 1 ? 'Google Maps link' : 'all Google Maps links'}</button>
+      </div>
+      <div class="qr-grid" id="qr-grid"></div>
+    </div>`;
+
+  const qrGrid = document.getElementById('qr-grid');
+  const copyBtn = document.getElementById('copy-share-url-btn');
+
+  copyBtn.onclick = async ()=>{
+    const text = legs.length === 1
+      ? legUrls[0]
+      : legUrls.map((u,idx)=>`Leg ${idx+1} of ${legs.length}: ${u}`).join('\n');
+    try{
+      await navigator.clipboard.writeText(text);
+      copyBtn.textContent = 'Copied ✓';
+    }catch(err){
+      prompt(legs.length === 1 ? 'Copy this Google Maps link:' : 'Copy these Google Maps links:', text);
+    }
+  };
+
+  legs.forEach((leg,idx)=>{
+    const url = legUrls[idx];
+    const card = document.createElement('div');
+    card.className = 'qr-card';
+    card.innerHTML = `
+      <div class="qr-label">${legs.length === 1 ? 'Route' : `Leg ${idx+1} of ${legs.length}`}</div>
+      <div class="qr-code"></div>
+      <a class="qr-open" target="_blank" rel="noopener" href="${url}">Open in Google Maps</a>`;
+    qrGrid.appendChild(card);
+    renderQrInto(card.querySelector('.qr-code'), url);
+  });
+
+  area.classList.add('show');
+  btn.textContent = legs.length === 1 ? '▣ Refresh route QR' : `▣ Refresh ${legs.length} route QRs`;
+}
+
+function renderSharedRouteCard(payload, mode='route'){
+  const card = document.getElementById('shared-route-card');
+  if(!card || !payload || !payload.start || !Array.isArray(payload.stops)) return;
+
+  const start = {
+    label: payload.start.label || 'Start',
+    lat: Number(payload.start.lat),
+    lng: Number(payload.start.lng)
+  };
+  const stops = payload.stops.map((s,i)=>({
+    name: s.name || `Stop ${i+1}`,
+    address: s.address || '',
+    lat: Number(s.lat),
+    lng: Number(s.lng)
+  })).filter(s=>Number.isFinite(s.lat) && Number.isFinite(s.lng));
+
+  const sequence = [start, ...stops];
+  const legs = splitRouteIntoLegs(sequence);
+
+  card.innerHTML = `
+    <h2><span class="eyebrow">Shared route</span> ${mode==='leg' ? `Leg ${payload.leg || 1} of ${payload.totalLegs || legs.length}` : 'Route'}</h2>
+    <div class="shared-route-stop">
+      <span class="n">S</span>
+      <span class="name"><strong>${escapeHtml(start.label)}</strong></span>
+    </div>
+    ${stops.map((s,i)=>`
+      <div class="shared-route-stop">
+        <span class="n">${i+1}</span>
+        <span class="name">
+          <strong>${escapeHtml(s.name)}</strong>
+          ${s.address ? `<span class="addr">${escapeHtml(s.address)}</span>` : ''}
+        </span>
+      </div>`).join('')}
+    <div class="shared-route-leg">
+      <div class="share-route-help">Open the Google Maps legs in order.</div>
+      <div id="shared-route-links"></div>
+    </div>`;
+
+  const links = card.querySelector('#shared-route-links');
+  legs.forEach((leg,idx)=>{
+    const a = document.createElement('a');
+    a.className = 'maps-link';
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.href = makeGoogleMapsUrl(leg);
+    a.textContent = legs.length > 1 ? `Open leg ${idx+1} of ${legs.length} →` : 'Open in Google Maps →';
+    a.style.marginTop = idx===0 ? '10px' : '8px';
+    links.appendChild(a);
+  });
+
+  card.classList.add('show');
+  sharedRouteLoaded = true;
+}
+
+function loadSharedRouteFromHash(){
+  const hash = window.location.hash || '';
+  const routeMatch = hash.match(/^#route=(.+)$/);
+  const legMatch = hash.match(/^#leg=(.+)$/);
+
+  if(routeMatch){
+    const payload = decodeRoutePayload(routeMatch[1]);
+    if(payload) renderSharedRouteCard(payload, 'route');
+  }else if(legMatch){
+    const payload = decodeRoutePayload(legMatch[1]);
+    if(payload) renderSharedRouteCard(payload, 'leg');
+  }
+}
+
 function confirmRoute(){
   if(pendingOrder.length===0){
     alert('Your route has no stops left — add some back or re-run the optimizer.');
     return;
   }
 
-  // Google Maps' web/app Directions UI caps at 10 total stops
-  // (origin + up to 9 waypoints + destination). Split into legs if we're over.
-  const MAX_STOPS_PER_LEG = 10;
   const legsContainer = document.getElementById('legs-container');
   const legsNote = document.getElementById('legs-note');
   legsContainer.innerHTML = '';
 
   const fullSeq = [startLocation, ...pendingOrder];
-  const legs = [];
-  let i = 0;
-  while(i < fullSeq.length-1){
-    const legPoints = fullSeq.slice(i, Math.min(i+MAX_STOPS_PER_LEG, fullSeq.length));
-    legs.push(legPoints);
-    i += MAX_STOPS_PER_LEG - 1; // overlap last point as next leg's start
-  }
+  confirmedLegs = splitRouteIntoLegs(fullSeq);
 
-  if(legs.length>1){
-    legsNote.textContent = `${fullSeq.length} total stops exceeds Google Maps' 10-stop limit per trip — split into ${legs.length} legs. Open and complete them in order.`;
-  } else {
+  if(confirmedLegs.length>1){
+    legsNote.textContent = `${fullSeq.length} total stops exceeds Google Maps' 10-stop limit per trip — split into ${confirmedLegs.length} legs. Open and complete them in order.`;
+  }else{
     legsNote.textContent = '';
   }
 
-  legs.forEach((legPoints, idx)=>{
-    const origin = `${legPoints[0].lat},${legPoints[0].lng}`;
-    const destination = `${legPoints[legPoints.length-1].lat},${legPoints[legPoints.length-1].lng}`;
-    const mid = legPoints.slice(1,-1).map(s=>`${s.lat},${s.lng}`).join('|');
-    let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
-    if(mid) url += `&waypoints=${encodeURIComponent(mid)}`;
+  confirmedLegs.forEach((legPoints, idx)=>{
     const a = document.createElement('a');
     a.className = 'maps-link';
-    a.href = url;
+    a.href = makeGoogleMapsUrl(legPoints);
     a.target = '_blank';
+    a.rel = 'noopener';
     a.style.marginTop = idx===0 ? '10px' : '8px';
-    a.textContent = legs.length>1 ? `Open leg ${idx+1} of ${legs.length} →` : 'Open in Google Maps →';
+    a.textContent = confirmedLegs.length>1 ? `Open leg ${idx+1} of ${confirmedLegs.length} →` : 'Open in Google Maps →';
     legsContainer.appendChild(a);
   });
 
   const badge = document.getElementById('confirmed-badge');
   badge.textContent = `Route confirmed with ${pendingOrder.length} stop(s). Reorder or drop stops above any time — you'll just need to confirm again.`;
   badge.classList.add('show');
+
+  const shareBtn = document.getElementById('share-route-btn');
+  if(shareBtn) shareBtn.style.display = 'block';
+  clearShareArea();
+
   legsContainer.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
-
 /* ---------- Init ---------- */
 function applyThemeButtonLabel(){
   const isDark = document.documentElement.getAttribute('data-theme')==='dark';
@@ -1305,6 +1549,7 @@ function toggleTheme(){
 }
 
 applyThemeButtonLabel();
+loadSharedRouteFromHash();
 restoreLocal();
 restoreApiKey();
 renderPlaceList();
