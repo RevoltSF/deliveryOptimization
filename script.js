@@ -155,6 +155,206 @@ function parsePastedContent(text){
   return results;
 }
 
+/* ---------- Google Maps link parser ----------
+   Handles these URL shapes (all from the address bar or "Share" button):
+     /maps/place/Name/@lat,lng,zoom   ← most common shared place link
+     /maps/dir/Stop1/Stop2/Stop3      ← route / directions link (multi-stop)
+     /@lat,lng,zoom                   ← plain map view
+     ?q=lat,lng  |  ?ll=lat,lng       ← older query-param formats
+   Shortened links (goo.gl, maps.app.goo.gl) can't be resolved client-side;
+   the function notes them separately so the UI can explain why. */
+function parseGoogleMapsLinks(text){
+  const resolved   = [];  // {name, lat, lng, src}
+  const needsGeocode = []; // place-name strings that need an API lookup
+  const unresolved = []; // {url, reason}
+
+  // Pull every URL out of the pasted text (one per line, or space-separated in a line).
+  const urls = [];
+  text.split(/[\n\r]+/).map(l=>l.trim()).filter(Boolean).forEach(line=>{
+    const found = line.match(/https?:\/\/[^\s"'<>]+/g);
+    if(found) found.forEach(u=>urls.push(u.replace(/[,;.]+$/,'')));
+    else if(line.length>0) urls.push(line.replace(/[,;.]+$/,''));
+  });
+
+  urls.forEach(rawUrl=>{
+    try{
+      const u = new URL(rawUrl);
+      const host = u.hostname.replace(/^www\./,'');
+      const path = u.pathname;
+
+      // Shortened links can't be resolved in the browser.
+      if(host==='goo.gl' || host==='maps.app.goo.gl'){
+        unresolved.push({url:rawUrl, reason:'shortened'});
+        return;
+      }
+
+      if(host!=='maps.google.com' && host!=='google.com' && !host.endsWith('.google.com')){
+        unresolved.push({url:rawUrl, reason:'not a Maps link'});
+        return;
+      }
+
+      // --- /maps/dir/Stop1/Stop2/... (route / directions link) ---
+      if(path.includes('/maps/dir/')){
+        const dirPart = path.replace(/^.*\/maps\/dir\//,'');
+        const segments = dirPart.split('/')
+          .map(s=>decodeURIComponent(s.replace(/\+/g,' ')).trim())
+          .filter(s=>s && !s.startsWith('data=') && !s.startsWith('@'));
+        let gotAny = false;
+        segments.forEach(seg=>{
+          const co = seg.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+          if(co){
+            resolved.push({name:seg, lat:parseFloat(co[1]), lng:parseFloat(co[2]), src:'maps-link'});
+            gotAny = true;
+          } else if(seg.length>0){
+            needsGeocode.push(seg);
+            gotAny = true;
+          }
+        });
+        if(!gotAny) unresolved.push({url:rawUrl, reason:'no stops found in route URL'});
+        return;
+      }
+
+      // --- /maps/place/Name/@lat,lng,zoom ---
+      const placeAt = path.match(/\/maps\/place\/([^/@]+)\/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+      if(placeAt){
+        const name = decodeURIComponent(placeAt[1]).replace(/\+/g,' ');
+        resolved.push({name, lat:parseFloat(placeAt[2]), lng:parseFloat(placeAt[3]), src:'maps-link'});
+        return;
+      }
+
+      // --- /@lat,lng (plain view; name from ?q if present) ---
+      const atView = path.match(/\/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+      if(atView){
+        const q = u.searchParams.get('q');
+        const name = q || `${parseFloat(atView[1]).toFixed(5)}, ${parseFloat(atView[2]).toFixed(5)}`;
+        if(q){
+          const co = q.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+          if(co) resolved.push({name:q, lat:parseFloat(co[1]), lng:parseFloat(co[2]), src:'maps-link'});
+          else   resolved.push({name, lat:parseFloat(atView[1]), lng:parseFloat(atView[2]), src:'maps-link'});
+        } else {
+          resolved.push({name, lat:parseFloat(atView[1]), lng:parseFloat(atView[2]), src:'maps-link'});
+        }
+        return;
+      }
+
+      // --- ?q=lat,lng or ?q=place name ---
+      const q = u.searchParams.get('q');
+      if(q){
+        const co = q.match(/^(-?\d+\.?\d*),\s*(-?\d+\.?\d*)$/);
+        if(co) resolved.push({name:q, lat:parseFloat(co[1]), lng:parseFloat(co[2]), src:'maps-link'});
+        else   needsGeocode.push(q);
+        return;
+      }
+
+      // --- ?ll=lat,lng (older share format) ---
+      const ll = u.searchParams.get('ll');
+      if(ll){
+        const parts = ll.split(',');
+        if(parts.length>=2 && !isNaN(parseFloat(parts[0])) && !isNaN(parseFloat(parts[1]))){
+          const name = u.searchParams.get('q') || ll;
+          resolved.push({name, lat:parseFloat(parts[0]), lng:parseFloat(parts[1]), src:'maps-link'});
+          return;
+        }
+      }
+
+      unresolved.push({url:rawUrl, reason:'could not extract coordinates'});
+    }catch(e){
+      if(rawUrl.startsWith('http')) unresolved.push({url:rawUrl, reason:'invalid URL'});
+    }
+  });
+
+  return {resolved, needsGeocode, unresolved};
+}
+
+// Shared worker: geocodes `names` via the Places API, merges results, then
+// optionally kicks off route optimization.
+async function geocodeLinksAndAdd(names, doOptimize){
+  const status = document.getElementById('maps-links-status');
+  const found = [], failed = [];
+  for(let i=0;i<names.length;i++){
+    status.textContent = `Geocoding ${i+1}/${names.length}: ${names[i]}…`;
+    const {result, error} = await lookupPlace(googleApiKey, names[i]);
+    if(error) failed.push(names[i]);
+    else found.push({...result, checked:true});
+    await new Promise(r=>setTimeout(r,150));
+  }
+  if(found.length) mergePlaces(found);
+  let msg = found.length ? `Geocoded ${found.length} more location${found.length!==1?'s':''}.` : '';
+  if(failed.length) msg += ` Couldn't find: ${failed.join(', ')}.`;
+  status.style.color = failed.length ? 'var(--amber)' : 'var(--teal)';
+  status.textContent = msg;
+  if(doOptimize) tryAutoOptimizeFromLinks();
+}
+
+function tryAutoOptimizeFromLinks(){
+  const status = document.getElementById('maps-links-status');
+  if(!startLocation){
+    const cur = status.textContent;
+    status.textContent = (cur ? cur+' ' : '')+'Set a starting point (Step 03), then click "Get optimized route".';
+    document.getElementById('start-search').scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+  buildRoute();
+}
+
+// Called by the "Add to my places" button.
+function importMapsLinks(){ _importMapsLinksCore(false); }
+
+// Called by the "Add & auto-optimize" button.
+function importAndOptimizeMapsLinks(){ _importMapsLinksCore(true); }
+
+function _importMapsLinksCore(doOptimize){
+  const box    = document.getElementById('maps-links-box');
+  const status = document.getElementById('maps-links-status');
+  const text   = box.value.trim();
+  if(!text){
+    status.style.color = 'var(--danger)';
+    status.textContent = 'Paste at least one Google Maps link first.';
+    return;
+  }
+
+  const {resolved, needsGeocode, unresolved} = parseGoogleMapsLinks(text);
+
+  if(resolved.length===0 && needsGeocode.length===0){
+    status.style.color = 'var(--danger)';
+    let msg = 'No Google Maps locations found in that text.';
+    if(unresolved.some(u=>u.reason==='shortened'))
+      msg += ' Shortened links (goo.gl / maps.app.goo.gl) can\'t be read directly — open them in Maps and copy the full URL from the address bar instead.';
+    status.textContent = msg;
+    return;
+  }
+
+  // Add all coordinate-resolved places (pre-checked so they're ready to route).
+  const withChecked = resolved.map(p=>({...p, checked:true}));
+  const added = withChecked.length ? mergePlaces(withChecked) : 0;
+
+  let msg = '';
+  if(resolved.length>0)
+    msg += `Parsed ${resolved.length} location${resolved.length!==1?'s':''} from link${resolved.length!==1?'s':''}; added ${added} new.`;
+
+  if(needsGeocode.length>0){
+    if(googleApiKey){
+      msg += ` Looking up ${needsGeocode.length} named stop${needsGeocode.length!==1?'s':''} via Places API…`;
+      status.style.color = 'var(--amber)';
+      status.textContent = msg;
+      if(added>0 || resolved.length>0) box.value = '';
+      geocodeLinksAndAdd(needsGeocode, doOptimize);
+      return;
+    } else {
+      msg += ` ${needsGeocode.length} stop${needsGeocode.length!==1?'s':''} had no coordinates — add your API key under Advanced to geocode them, or search for them manually above.`;
+    }
+  }
+
+  if(unresolved.some(u=>u.reason==='shortened'))
+    msg += ' Note: shortened links can\'t be auto-resolved — open them in Maps and copy the full URL.';
+
+  status.style.color = (resolved.length>0 || needsGeocode.length>0) ? 'var(--teal)' : 'var(--amber)';
+  status.textContent = msg;
+  if(added>0 || resolved.length>0) box.value = '';
+
+  if(doOptimize && (resolved.length>0)) tryAutoOptimizeFromLinks();
+}
+
 function importFromPaste(){
   const text = document.getElementById('paste-box').value;
   const parsed = parsePastedContent(text);
@@ -420,7 +620,11 @@ function removePlace(id){
 
 function setAllChecked(val){
   const places = loadPlaces();
-  places.forEach(p=>p.checked=val);
+  places.forEach(p=>{
+    p.checked = val;
+    if(!val) p.pinOrder = null; // clearing selection also wipes pins
+  });
+  if(!val) sessionStorage.removeItem(SS_PINS);
   savePlaces(places);
   renderPlaceList();
 }
