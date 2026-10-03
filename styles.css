@@ -386,6 +386,19 @@
     }
   }
 
+/* ---------- Maps link import ---------- */
+#maps-links-box{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11.5px;
+  resize:vertical;
+}
+.maps-link-tip{
+  font-size:11.5px;
+  color:var(--paper-dim);
+  margin-top:6px;
+  line-height:1.5;
+}
+
 /* ---------- QR route sharing ---------- */
 .share-route-area{margin-top:12px;display:none;}
 .share-route-area.show{display:block;}
