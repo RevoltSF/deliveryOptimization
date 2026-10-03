@@ -49,7 +49,21 @@
   </div>
 
   <div class="card">
-    <h2><span class="eyebrow">02</span> Your places <span class="counter" id="place-count"></span></h2>
+    <h2><span class="eyebrow">02</span> Paste Google Maps links</h2>
+    <label class="field-label">Paste one or more Google Maps links — shared places, route/directions URLs, or anything from the Maps address bar. One per line, or all at once.</label>
+    <textarea id="maps-links-box" rows="4" placeholder="https://www.google.com/maps/place/Eiffel+Tower/@48.8584,2.2945,17z&#10;https://www.google.com/maps/dir/Place+A/Place+B/Place+C&#10;https://maps.google.com/?q=37.7749,-122.4194&#10;..."></textarea>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn-secondary" onclick="importMapsLinks()">Add to my places</button>
+      <button class="btn-primary" onclick="importAndOptimizeMapsLinks()">Add &amp; auto-optimize</button>
+    </div>
+    <div id="maps-links-status" style="font-size:12.5px;color:var(--teal);margin-top:8px;"></div>
+    <div style="font-size:11.5px;color:var(--paper-dim);margin-top:6px;line-height:1.5;">
+      <strong>Tip:</strong> Paste a Google Maps <em>directions</em> link to import a whole route at once, then re-optimize it. Shortened links (goo.gl / maps.app.goo.gl) need to be opened in Maps first so you can copy the full URL.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="eyebrow">03</span> Your places <span class="counter" id="place-count"></span></h2>
     <input type="text" id="place-filter" placeholder="Search your places..." oninput="renderPlaceList()" style="margin-bottom:10px;">
     <div class="row" style="margin-bottom:10px;">
       <button class="btn-secondary" onclick="setAllChecked(true)">Select all</button>
@@ -61,7 +75,7 @@
   </div>
 
   <div class="card">
-    <h2><span class="eyebrow">03</span> Starting point</h2>
+    <h2><span class="eyebrow">04</span> Starting point</h2>
     <div class="row">
       <button class="btn-secondary" onclick="useCurrentLocation()">Use my current location</button>
     </div>
@@ -88,7 +102,7 @@
   <button id="build-route-btn" class="btn-primary btn-block" style="padding:15px;font-size:15.5px;" onclick="buildRoute()">Get optimized route</button>
 
   <div class="card" id="route-output">
-    <h2><span class="eyebrow">05</span> Review & adjust order</h2>
+    <h2><span class="eyebrow">06</span> Review & adjust order</h2>
     <div id="pin-note-area"></div>
     <div id="editable-order"></div>
     <div class="row" style="margin-top:12px;">
