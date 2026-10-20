@@ -107,7 +107,12 @@
 
   <div class="card" id="route-output">
     <h2><span class="eyebrow">05</span> Review & adjust order</h2>
-    <div id="pin-note-area"></div>
+    <div class="row" style="margin-bottom:12px;align-items:center;gap:8px;">
+<label class="field-label" for="depart-mode" style="margin:0;">Leave</label>
+<select id="depart-mode" onchange="onDepartChange()"><option value="now">now</option><option value="later">at a later time</option></select>
+<input type="datetime-local" id="depart-time" style="display:none;" onchange="onDepartChange()">
+</div>
+<div id="pin-note-area"></div>
     <div id="editable-order"></div>
     <div class="row" style="margin-top:12px;">
       <button class="btn-secondary" onclick="resetToOptimized()">↻ Reset to optimized order</button>
@@ -176,6 +181,12 @@
 </aside>
 
 </div>
+
+<div id="action-bar" class="action-bar" role="region" aria-label="Route actions">
+<span id="action-bar-text"></span>
+<button class="btn-primary" type="button" onclick="buildRoute()">Get optimized route</button>
+</div>
+<div id="toast-root" aria-live="polite"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

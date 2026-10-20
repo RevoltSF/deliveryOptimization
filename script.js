@@ -1,3 +1,30 @@
+/* ---------- Toasts (replace blocking alert() popups) ---------- */
+function showToast(msg){
+  const root = document.getElementById('toast-root');
+  if(!root){ console.warn(msg); return; }
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  t.onclick = ()=>t.remove();
+  root.appendChild(t);
+  setTimeout(()=>t.remove(), Math.min(9000, 2800 + msg.length*45));
+}
+window.alert = m => showToast(String(m));
+
+/* ---------- Sticky action bar ---------- */
+function updateActionBar(){
+  const bar = document.getElementById('action-bar');
+  if(!bar) return;
+  const n = loadPlaces().filter(p=>p.checked).length;
+  bar.classList.toggle('show', n>0);
+  document.body.classList.toggle('has-bar', n>0);
+  const buildBtn = document.getElementById('build-route-btn');
+  if(buildBtn && !buildBtn.disabled)
+    buildBtn.textContent = n>0 ? `Get optimized route (${n} stop${n===1?'':'s'})` : 'Get optimized route';
+  document.getElementById('action-bar-text').textContent =
+    `${n} stop${n===1?'':'s'} · ${startLocation ? 'Start: '+startLocation.label : 'No start set'}`;
+}
+
 /* ---------- In-memory app state, cached to localStorage as a safety net ---------- */
 const LS_STATE = 'wp_app_state_cache';
 let appState = {
@@ -459,14 +486,16 @@ function clearAllData(){
 /* ---------- Place list rendering ---------- */
 function renderPlaceList(){
   const places = loadPlaces();
+  updateActionBar();
   const filterText = (document.getElementById('place-filter')?.value || '').trim().toLowerCase();
   const filtered = filterText ? places.filter(p=>
     p.name.toLowerCase().includes(filterText) ||
     (p.address && p.address.toLowerCase().includes(filterText))
   ) : places;
 
+  const selectedCount = places.filter(p=>p.checked).length;
   document.getElementById('place-count').textContent =
-    filterText ? `(${filtered.length} of ${places.length})` : `(${places.length})`;
+    `(${filterText ? `${filtered.length} of ${places.length} shown` : `${places.length} total`} · ${selectedCount} selected)`;
 
   const list = document.getElementById('place-list');
   if(places.length===0){
@@ -784,6 +813,7 @@ function currentStopNumbers(){
 // built route). Otherwise routine edits (check/uncheck, reorder, theme
 // toggle) would keep yanking the zoom back out.
 function syncMapMarkers(fit=false){
+  updateActionBar();
   if(!gMap) return;
   mapMarkers.forEach(m=>m.setMap(null));
   mapMarkers = [];
@@ -900,7 +930,8 @@ async function drawRoutePolyline(fit=false){
         result = await new Promise((resolve,reject)=>{
           svc.route({
             origin, destination,
-            travelMode: google.maps.TravelMode.DRIVING
+            travelMode: google.maps.TravelMode.DRIVING,
+            drivingOptions: {departureTime: getDepartureDate(), trafficModel: google.maps.TrafficModel.BEST_GUESS}
           }, (res,status)=>{
             if(status==='OK') resolve(res); else reject(status);
           });
@@ -953,6 +984,30 @@ function redrawAllLegPolylines(fit=false){
   updateLegTimes();
 }
 
+// Departure time: "now" or a chosen later time (Google only accepts now/future).
+function isLater(){ return document.getElementById('depart-mode')?.value==='later'; }
+function getDepartureDate(){
+  const now = new Date();
+  const v = document.getElementById('depart-time')?.value;
+  if(!isLater() || !v) return now;
+  const d = new Date(v);
+  return (isNaN(d) || d<now) ? now : d;
+}
+function onDepartChange(){
+  const t = document.getElementById('depart-time');
+  const later = isLater();
+  t.style.display = later ? '' : 'none';
+  const toLocal = d => new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  t.min = toLocal(new Date());
+  if(later && !t.value){
+    const d = new Date(Date.now()+3600e3); d.setMinutes(0,0,0);
+    t.value = toLocal(d);
+  } else if(later && new Date(t.value) < new Date()){
+    showToast('That time has already passed — using the current time instead.');
+  }
+  if(pendingOrder.length) renderEditableOrder();
+}
+
 // Shows minutes of travel to each stop. Uses Google's driving time once a hop's
 // road route has loaded; until then (or without a map key) shows a straight-line
 // estimate marked with "~" (assumes ~50 km/h).
@@ -960,25 +1015,33 @@ function updateLegTimes(){
   if(!startLocation || pendingOrder.length===0) return;
   const seq = [startLocation, ...pendingOrder];
   const usable = legRouteChoices.length === pendingOrder.length;
-  let total = 0, anyEstimate = false;
+  let total = 0, anyEstimate = false, live = true, cum = 0;
+  const dep = getDepartureDate();
   document.querySelectorAll('#editable-order .eta').forEach(el=>{
     const i = Number(el.dataset.i);
     const ch = usable ? legRouteChoices[i] : null;
     let sec, est = false;
     if(ch && ch.result){
-      sec = ch.result.routes[0].legs.reduce((t,l)=>t+l.duration.value, 0);
+      const legs = ch.result.routes[0].legs;
+      if(legs.some(l=>!l.duration_in_traffic)) live = false;
+      sec = legs.reduce((t,l)=>t+(l.duration_in_traffic||l.duration).value, 0);
     } else {
       sec = haversine(seq[i], seq[i+1]) * 72;
-      est = true; anyEstimate = true;
+      est = true; anyEstimate = true; live = false;
     }
-    total += sec;
-    el.textContent = `${est?'~':''}${Math.max(1, Math.round(sec/60))} min`;
+    total += sec; cum += sec;
+    const arr = new Date(dep.getTime() + cum*1000).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    el.innerHTML = `${est?'~':''}${Math.max(1, Math.round(sec/60))} min<small>arr. ${arr}</small>`;
   });
   const tot = document.getElementById('route-total');
   if(tot){
     const m = Math.round(total/60), h = Math.floor(m/60), r = m%60;
     const txt = h>0 ? `${h} hour${h===1?'':'s'}${r?` ${r} minute${r===1?'':'s'}`:''}` : `${r} minute${r===1?'':'s'}`;
-    tot.textContent = `Total drive: ${anyEstimate?'~':''}${txt}`;
+    const fmt = d => d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+    const end = new Date(dep.getTime() + cum*1000);
+    const endDay = end.toDateString()!==dep.toDateString() ? ` (${end.toLocaleDateString([], {weekday:'short'})})` : '';
+    tot.innerHTML = `Total drive: ${anyEstimate?'~':''}${txt}${live?(isLater()?' · predicted traffic':' · live traffic'):''}`
+      + `<br><small>Leave ${fmt(dep)} · Arrive at last stop ${anyEstimate?'~':''}${fmt(end)}${endDay}</small>`;
   }
 }
 
@@ -1356,7 +1419,8 @@ async function fetchDrivingMatrix(points){
           svc.getDistanceMatrix({
             origins: originsChunk.map(p=>({lat:p.lat,lng:p.lng})),
             destinations: destChunk.map(p=>({lat:p.lat,lng:p.lng})),
-            travelMode: google.maps.TravelMode.DRIVING
+            travelMode: google.maps.TravelMode.DRIVING,
+            drivingOptions: {departureTime: getDepartureDate(), trafficModel: google.maps.TrafficModel.BEST_GUESS}
           }, (res,status)=>{
             if(status==='OK') resolve(res); else reject(status);
           });
@@ -1368,7 +1432,7 @@ async function fetchDrivingMatrix(points){
         row.elements.forEach((el,ci)=>{
           const originId = originsChunk[ri].id;
           const destId = destChunk[ci].id;
-          durations[originId][destId] = (el.status==='OK') ? el.duration.value : null;
+          durations[originId][destId] = (el.status==='OK') ? (el.duration_in_traffic||el.duration).value : null;
         });
       });
       await new Promise(r=>setTimeout(r,120)); // gentle pacing between chunk requests
@@ -1429,7 +1493,8 @@ async function buildRoute(){
       ...allChecked.map(p=>({id:p.id, lat:p.lat, lng:p.lng}))
     ];
     const matrix = await fetchDrivingMatrix(points);
-    if(buildBtn){ buildBtn.disabled = false; buildBtn.textContent = 'Get optimized route'; }
+    if(buildBtn){ buildBtn.disabled = false; }
+    updateActionBar();
     if(matrix){
       dist = drivingDistFn(matrix);
     } else {

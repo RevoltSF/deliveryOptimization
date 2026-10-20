@@ -429,3 +429,18 @@
 .stop-row.dragging{opacity:.55;background:var(--panel-2);cursor:grabbing}
 .stop-row.drop-before{box-shadow:0 -2px 0 var(--amber)}
 .stop-row.drop-after{box-shadow:0 2px 0 var(--amber)}
+
+.action-bar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:var(--panel);border-top:1px solid var(--line)}
+.action-bar.show{display:flex}
+.action-bar span{font-size:13px;color:var(--paper-dim);min-width:0}
+.action-bar button{padding:11px 18px;white-space:nowrap}
+body.has-bar{padding-bottom:84px}
+#toast-root{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:50;display:flex;flex-direction:column;gap:8px;width:min(92vw,420px);pointer-events:none}
+.toast{background:var(--paper);color:var(--bg);padding:10px 14px;border-radius:4px;font-size:13px;line-height:1.4;box-shadow:0 4px 14px rgba(0,0,0,.25);pointer-events:auto;cursor:pointer;animation:toast-in .18s ease-out}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(pointer:coarse){.stop-row .mini-btn{width:38px;height:38px}.place .rm{min-width:38px;min-height:38px}.place .pin-order{min-height:38px}}
+
+.eta{text-align:right;line-height:1.25}
+.eta small{display:block;font-size:11px;opacity:.8;font-family:'Work Sans',sans-serif}
+
+.route-total small{font-weight:400;color:var(--paper-dim);font-size:12px}
