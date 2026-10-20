@@ -421,3 +421,11 @@
 .shared-route-stop .name{flex:1;min-width:0;}
 .shared-route-stop .addr{display:block;color:var(--paper-dim);font-size:12px;margin-top:2px;}
 .shared-route-leg{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;}
+
+.eta{font-size:12px;color:var(--paper-dim);white-space:nowrap;margin-right:6px;font-family:'IBM Plex Mono',monospace}
+.route-total{font-size:13px;font-weight:600;margin-top:10px;text-align:right}
+
+.stop-row .drag-handle{cursor:grab;touch-action:none;user-select:none;color:var(--paper-dim);width:18px;text-align:center;font-size:15px;line-height:1;flex-shrink:0;align-self:flex-start;padding:3px 0}
+.stop-row.dragging{opacity:.55;background:var(--panel-2);cursor:grabbing}
+.stop-row.drop-before{box-shadow:0 -2px 0 var(--amber)}
+.stop-row.drop-after{box-shadow:0 2px 0 var(--amber)}
