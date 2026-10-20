@@ -426,7 +426,7 @@
 .route-total{font-size:13px;font-weight:600;margin-top:10px;text-align:right}
 
 .stop-row .drag-handle{cursor:grab;touch-action:none;user-select:none;color:var(--paper-dim);width:18px;text-align:center;font-size:15px;line-height:1;flex-shrink:0;align-self:flex-start;padding:3px 0}
-.stop-row.dragging{opacity:.55;background:var(--panel-2);cursor:grabbing}
+.stop-row.dragging{position:relative;z-index:20;background:var(--panel);border-radius:6px;box-shadow:0 12px 28px rgba(0,0,0,.35);border-bottom-color:transparent;cursor:grabbing;transition:box-shadow .15s}
 .stop-row.drop-before{box-shadow:0 -2px 0 var(--amber)}
 .stop-row.drop-after{box-shadow:0 2px 0 var(--amber)}
 

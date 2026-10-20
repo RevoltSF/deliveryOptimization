@@ -1875,31 +1875,36 @@ function confirmRoute(){
     if(!handle) return;
     const row = handle.closest('.stop-row');
     const i = Number(row.dataset.i);
-    drag = {from:i, to:i};
+    drag = {row, from:i, to:i, startY:e.pageY, dy:0};
     handle.setPointerCapture(e.pointerId);
-    row.classList.add('dragging');
+    row.classList.add('dragging');   // lifts the card out of the list
     e.preventDefault();
   });
   list.addEventListener('pointermove', e=>{
     if(!drag) return;
-    const all = rows();
     if(e.clientY < 70) window.scrollBy(0,-12);
     else if(e.clientY > window.innerHeight-70) window.scrollBy(0,12);
-    let target = all.find(r=>{ const b=r.getBoundingClientRect(); return e.clientY>=b.top && e.clientY<=b.bottom; });
-    if(!target) target = e.clientY < all[0].getBoundingClientRect().top ? all[0] : all[all.length-1];
+    drag.dy = e.pageY - drag.startY;
+    drag.row.style.transform = `translateY(${drag.dy}px) scale(1.02)`;  // card follows the pointer
+    const all = rows();
+    // hit-test against each row's resting position (the lifted row is offset by dy)
+    const span = r=>{ const b=r.getBoundingClientRect(); const off = r===drag.row ? drag.dy : 0; return {top:b.top-off, bottom:b.bottom-off}; };
+    let target = all.find(r=>{ const b=span(r); return e.clientY>=b.top && e.clientY<=b.bottom; });
+    if(!target) target = e.clientY < span(all[0]).top ? all[0] : all[all.length-1];
     drag.to = Number(target.dataset.i);
     all.forEach(r=>r.classList.remove('drop-before','drop-after'));
     if(drag.to !== drag.from) target.classList.add(drag.to < drag.from ? 'drop-before' : 'drop-after');
   });
   function finish(commit){
     if(!drag) return;
-    const {from, to} = drag;
+    const {from, to, row} = drag;
     drag = null;
     if(commit && from!==to){
       const [moved] = pendingOrder.splice(from,1);
       pendingOrder.splice(to,0,moved);
       renderEditableOrder();
     } else {
+      row.style.transform = '';
       rows().forEach(r=>r.classList.remove('dragging','drop-before','drop-after'));
     }
   }
