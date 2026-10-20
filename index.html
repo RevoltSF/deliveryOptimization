@@ -4,14 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Route Optimizer</title>
+<meta name="description" content="Pick your stops, get the shortest driving order, and open it in Google Maps.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600;700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script>
   // Runs before paint so the page loads straight into the saved theme, no flash.
   (function(){
     try{
-      if(localStorage.getItem('wp_theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+      var t=localStorage.getItem('wp_theme'); if(t==='dark' || (!t && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.setAttribute('data-theme','dark');
     }catch(e){}
   })();
 </script>
@@ -36,7 +38,9 @@
 <div class="layout">
 <main>
 
-  <div id="refresh-banner" class="banner" style="display:none;">
+  <div class="card shared-route-card" id="shared-route-card"></div>
+
+<div id="refresh-banner" class="banner" style="display:none;">
     <span id="refresh-banner-text"></span>
     <button class="btn-secondary" onclick="openImportInAdvanced();">Refresh now</button>
   </div>
@@ -56,7 +60,7 @@
       <button class="btn-secondary" onclick="importMapsLinks()">Add to my places</button>
       <button class="btn-primary" onclick="importAndOptimizeMapsLinks()">Add &amp; auto-optimize</button>
     </div>
-    <div id="maps-links-status" style="font-size:12.5px;color:var(--teal);margin-top:8px;"></div>
+    <div id="maps-links-status" aria-live="polite" style="font-size:12.5px;color:var(--teal);margin-top:8px;"></div>
     <div style="font-size:11.5px;color:var(--paper-dim);margin-top:6px;line-height:1.5;">
       <strong>Tip:</strong> Paste a Google Maps <em>directions</em> link to import a whole route at once, then re-optimize it. Shortened links (goo.gl / maps.app.goo.gl) need to be opened in Maps first so you can copy the full URL.
     </div>
@@ -79,7 +83,7 @@
     <div class="row">
       <button class="btn-secondary" onclick="useCurrentLocation()">Use my current location</button>
     </div>
-    <div id="start-status" style="font-size:12.5px;color:var(--paper-dim);margin-top:8px;"></div>
+    <div id="start-status" aria-live="polite" style="font-size:12.5px;color:var(--paper-dim);margin-top:8px;"></div>
     <label class="field-label" style="margin-top:12px;">— or search a starting address —</label>
     <input type="text" id="start-search" placeholder="Search a start location...">
     <div id="start-search-results" class="search-results"></div>
@@ -102,7 +106,7 @@
   <button id="build-route-btn" class="btn-primary btn-block" style="padding:15px;font-size:15.5px;" onclick="buildRoute()">Get optimized route</button>
 
   <div class="card" id="route-output">
-    <h2><span class="eyebrow">06</span> Review & adjust order</h2>
+    <h2><span class="eyebrow">05</span> Review & adjust order</h2>
     <div id="pin-note-area"></div>
     <div id="editable-order"></div>
     <div class="row" style="margin-top:12px;">
@@ -146,12 +150,12 @@
             <input type="file" id="file-input" accept=".json,.kml,.txt" style="display:none;" onchange="importFromFile(event)">
           </label>
         </div>
-        <div id="import-status" style="font-size:12.5px;color:var(--teal);margin-top:8px;"></div>
+        <div id="import-status" aria-live="polite" style="font-size:12.5px;color:var(--teal);margin-top:8px;"></div>
       </div>
 
       <div class="divider-label">API key</div>
       <label class="field-label">Google Places API key — saved in this browser so you don't have to re-enter it. Google Places keys are normally locked to your site/app anyway, but you can clear it below if this is a shared computer.</label>
-      <input type="text" id="api-key" placeholder="AIza..." autocomplete="off" oninput="onApiKeyInput(this.value)">
+      <input type="password" id="api-key" placeholder="AIza..." autocomplete="off" oninput="onApiKeyInput(this.value)">
       <button class="btn-secondary" style="margin-top:8px;" onclick="clearApiKey()">Clear saved key</button>
     </div>
   </div>
@@ -167,7 +171,7 @@
       <span><i style="background:var(--teal);"></i> start</span>
       <span><i style="background:var(--amber);border-radius:0;width:14px;height:3px;"></i> route</span>
     </div>
-    <div id="map-status">Add your Google Places API key under Advanced to enable the live map.</div>
+    <div id="map-status" aria-live="polite">Add your Google Places API key under Advanced to enable the live map.</div>
   </div>
 </aside>
 
