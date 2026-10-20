@@ -268,8 +268,8 @@ function parseGoogleMapsLinks(text){
 
 // Shared worker: geocodes `names` via the Places API, merges results, then
 // optionally kicks off route optimization.
-async function geocodeLinksAndAdd(names, doOptimize){
-  const status = document.getElementById('maps-links-status');
+async function geocodeLinksAndAdd(names, doOptimize, statusId='maps-links-status'){
+  const status = document.getElementById(statusId);
   const found = [], failed = [];
   for(let i=0;i<names.length;i++){
     status.textContent = `Geocoding ${i+1}/${names.length}: ${names[i]}…`;
@@ -290,7 +290,7 @@ function tryAutoOptimizeFromLinks(){
   const status = document.getElementById('maps-links-status');
   if(!startLocation){
     const cur = status.textContent;
-    status.textContent = (cur ? cur+' ' : '')+'Set a starting point (Step 03), then click "Get optimized route".';
+    status.textContent = (cur ? cur+' ' : '')+'Set a starting point (Step 04), then click "Get optimized route".';
     document.getElementById('start-search').scrollIntoView({behavior:'smooth', block:'center'});
     return;
   }
@@ -376,10 +376,12 @@ function importFromPaste(){
   let msg = '';
   if(geocoded.length) msg += `Found ${geocoded.length} places with coordinates, added ${added} new. `;
   if(needsGeocode.length){
-    msg += `${needsGeocode.length} place(s) had no coordinates in the export (a known Takeout gap) — moved their addresses into "Add places by name/address" below. Add your API key there and click "Look up & add" to finish importing them.`;
-    const box = document.getElementById('bulk-geocode-box');
-    box.value = (box.value ? box.value + '\n' : '') + needsGeocode.join('\n');
-    document.getElementById('bulk-geocode-box').scrollIntoView({behavior:'smooth', block:'center'});
+    if(googleApiKey){
+      msg += `${needsGeocode.length} place(s) had no coordinates in the export (a known Takeout gap) — looking them up via Places API…`;
+      geocodeLinksAndAdd(needsGeocode, false, 'import-status');
+    } else {
+      msg += `${needsGeocode.length} place(s) had no coordinates in the export (a known Takeout gap). Add your API key below and import again to look them up.`;
+    }
   }
   status.style.color = needsGeocode.length ? 'var(--amber)' : 'var(--teal)';
   status.textContent = msg;
@@ -484,7 +486,7 @@ function renderPlaceList(){
         title="Set a number to force this stop's position in the route (1–${pinMax}, based on how many places are checked). Leave blank to let the optimizer place it."
         onchange="setPinOrder('${p.id}', this.value)">
       <span class="name">${escapeHtml(p.name)}${p.address ? ` <span style="color:var(--paper-dim);font-weight:400;">(${escapeHtml(p.address)})</span>` : ''}</span>
-      <span class="src">${p.src||''}</span>
+      <span class="src">${escapeHtml(p.src||'')}</span>
       <button class="rm" onclick="regeocodePlace('${p.id}')" title="Re-check this location">↻</button>
       <button class="rm" onclick="removePlace('${p.id}')">✕</button>
     </div>
@@ -948,26 +950,68 @@ function redrawAllLegPolylines(fit=false){
     path.forEach(pt=>b.extend(pt));
   });
   if(fit && !b.isEmpty() && gMap) gMap.fitBounds(b, 60);
+  updateLegTimes();
+}
+
+// Shows minutes of travel to each stop. Uses Google's driving time once a hop's
+// road route has loaded; until then (or without a map key) shows a straight-line
+// estimate marked with "~" (assumes ~50 km/h).
+function updateLegTimes(){
+  if(!startLocation || pendingOrder.length===0) return;
+  const seq = [startLocation, ...pendingOrder];
+  const usable = legRouteChoices.length === pendingOrder.length;
+  let total = 0, anyEstimate = false;
+  document.querySelectorAll('#editable-order .eta').forEach(el=>{
+    const i = Number(el.dataset.i);
+    const ch = usable ? legRouteChoices[i] : null;
+    let sec, est = false;
+    if(ch && ch.result){
+      sec = ch.result.routes[0].legs.reduce((t,l)=>t+l.duration.value, 0);
+    } else {
+      sec = haversine(seq[i], seq[i+1]) * 72;
+      est = true; anyEstimate = true;
+    }
+    total += sec;
+    el.textContent = `${est?'~':''}${Math.max(1, Math.round(sec/60))} min`;
+  });
+  const tot = document.getElementById('route-total');
+  if(tot){
+    const m = Math.round(total/60), h = Math.floor(m/60), r = m%60;
+    const txt = h>0 ? `${h} hour${h===1?'':'s'}${r?` ${r} minute${r===1?'':'s'}`:''}` : `${r} minute${r===1?'':'s'}`;
+    tot.textContent = `Total drive: ${anyEstimate?'~':''}${txt}`;
+  }
 }
 
 /* ---------- Places Autocomplete (manual add + start search) ---------- */
 let autocompleteTimer;
 function wirePlaceSearch(inputId, resultsId, onSelect){
   const input = document.getElementById(inputId);
+  const resultsDiv = document.getElementById(resultsId);
+  resultsDiv.setAttribute('role','listbox');
+  let timer, seq = 0, last = [];   // per-input state: no shared timer, stale responses ignored
   input.addEventListener('input', ()=>{
-    clearTimeout(autocompleteTimer);
+    clearTimeout(timer);
     const q = input.value.trim();
-    const resultsDiv = document.getElementById(resultsId);
-    if(q.length<3){ resultsDiv.innerHTML=''; return; }
-    autocompleteTimer = setTimeout(()=>runTextSearch(q, resultsDiv, onSelect), 400);
+    if(q.length<3){ seq++; last=[]; resultsDiv.innerHTML=''; return; }
+    const mySeq = ++seq;
+    timer = setTimeout(async ()=>{
+      const res = await runTextSearch(q, resultsDiv, ()=>mySeq===seq);
+      if(mySeq===seq) last = res;
+    }, 400);
   });
+  resultsDiv.addEventListener('click', e=>{
+    const el = e.target.closest('[data-idx]');
+    const r = el && last[el.dataset.idx];
+    if(r) onSelect({name:r.name, address:r.address, lat:r.lat, lng:r.lng});
+  });
+  resultsDiv.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.dataset.idx!==undefined) e.target.click(); });
 }
 
-async function runTextSearch(query, resultsDiv, onSelect){
+async function runTextSearch(query, resultsDiv, isCurrent=()=>true){
   const key = googleApiKey;
   if(!key){
     resultsDiv.innerHTML = '<div class="search-result" style="color:var(--danger);cursor:default;">Add your Google Places API key under Advanced (bottom of the page) to search.</div>';
-    return;
+    return [];
   }
   resultsDiv.innerHTML = '<div class="search-result" style="cursor:default;">Searching…</div>';
 
@@ -1000,23 +1044,18 @@ async function runTextSearch(query, resultsDiv, onSelect){
     placesError = e.message;
   }
 
+  if(!isCurrent()) return [];
   if(results.length===0){
     resultsDiv.innerHTML = placesError
       ? `<div class="search-result" style="color:var(--danger);cursor:default;">Google API error: ${escapeHtml(placesError)}</div>`
       : '<div class="search-result" style="cursor:default;">No results for that search.</div>';
-    return;
+    return [];
   }
 
   resultsDiv.innerHTML = results.map((r,i)=>`
-    <div class="search-result" onclick='selectSearchResult(${i})'>${escapeHtml(r.name)}${r.src==='geocoded-address' ? ' <span style="color:var(--teal);font-size:10.5px;text-transform:uppercase;">exact address</span>' : ''}${r.address ? `<br><span style="color:var(--paper-dim);font-size:11.5px;">${escapeHtml(r.address)}</span>` : ''}</div>
+    <div class="search-result" data-idx="${i}" role="option" tabindex="0">${escapeHtml(r.name)}${r.src==='geocoded-address' ? ' <span style="color:var(--teal);font-size:10.5px;text-transform:uppercase;">exact address</span>' : ''}${r.address ? `<br><span style="color:var(--paper-dim);font-size:11.5px;">${escapeHtml(r.address)}</span>` : ''}</div>
   `).join('');
-  window.__lastSearchResults = results;
-  window.__lastSearchCallback = onSelect;
-}
-
-function selectSearchResult(i){
-  const r = window.__lastSearchResults[i];
-  window.__lastSearchCallback({name: r.name, address: r.address, lat: r.lat, lng: r.lng});
+  return results;
 }
 
 wirePlaceSearch('place-search','search-results', (place)=>{
@@ -1181,20 +1220,39 @@ function routeLength(start, order, dist=haversine){
 }
 
 function twoOpt(start, order, dist=haversine){
-  let improved = true;
-  while(improved){
-    improved = false;
-    for(let i=0;i<order.length-1;i++){
-      for(let j=i+1;j<order.length;j++){
-        const newOrder = order.slice(0,i).concat(order.slice(i,j+1).reverse(), order.slice(j+1));
-        if(routeLength(start,newOrder,dist) < routeLength(start,order,dist) - 1e-6){
-          order = newOrder;
-          improved = true;
-        }
-      }
+  // Open-path 2-opt with O(1) delta evaluation (the old version recomputed whole route lengths).
+  const p=[start,...order], n=order.length;
+  let improved=true, guard=0;
+  while(improved && guard++<100){
+    improved=false;
+    for(let i=1;i<n;i++) for(let j=i+1;j<=n;j++){
+      const a=p[i-1], b=p[i], c=p[j], d=p[j+1];
+      const delta = dist(a,c)-dist(a,b) + (d ? dist(b,d)-dist(c,d) : 0);
+      if(delta < -1e-6){ p.splice(i, j-i+1, ...p.slice(i,j+1).reverse()); improved=true; }
     }
   }
-  return order;
+  return p.slice(1);
+}
+
+// Or-opt: try moving each single stop to its best position elsewhere in the route.
+function orOpt(start, order, dist=haversine){
+  let p=[start,...order], improved=true, guard=0;
+  while(improved && guard++<50){
+    improved=false;
+    for(let i=1;i<p.length;i++){
+      const prev=p[i-1], cur=p[i], next=p[i+1];
+      const saved = dist(prev,cur) + (next ? dist(cur,next)-dist(prev,next) : 0);
+      const q = p.filter((_,idx)=>idx!==i);
+      let best=-1e-6, bestK=-1;
+      for(let k=0;k<q.length;k++){
+        const x=q[k], y=q[k+1];
+        const cost = dist(x,cur) + (y ? dist(cur,y)-dist(x,y) : 0) - saved;
+        if(cost<best){ best=cost; bestK=k; }
+      }
+      if(bestK>=0){ q.splice(bestK+1,0,cur); p=q; improved=true; }
+    }
+  }
+  return p.slice(1);
 }
 
 // Given a fixed skeleton of pinned stops (in absolute slot order), thread the
@@ -1271,7 +1329,7 @@ function computeOrder(dist=haversine){
     pinNote = `<div class="pin-note">${pinned.length} stop(s) locked to their exact position.${hadTies ? ' Some pins shared the same slot number, so ties were broken by picking whichever was closer to the previous stop.' : ''} Adjust freely below before confirming.</div>`;
   } else {
     order = nearestNeighborOrder(startLocation, allChecked, dist);
-    if(order.length<=12) order = twoOpt(startLocation, order, dist);
+    order = orOpt(startLocation, twoOpt(startLocation, order, dist), dist);
   }
   return {order, pinNote};
 }
@@ -1332,7 +1390,7 @@ function drivingDistFn(matrix){
   const idOf = o => o.id || 'start';
   return (a,b)=>{
     const d = matrix.getDuration(idOf(a), idOf(b));
-    return d==null ? haversine(a,b)*1000 : d;
+    return d==null ? haversine(a,b)*72 : d; // km -> seconds at ~50 km/h so units match the matrix
   };
 }
 
@@ -1410,15 +1468,17 @@ function renderEditableOrder(fit=false){
     </div>`;
 
   const stopRows = pendingOrder.map((s,i)=>`
-    <div class="stop-row">
+    <div class="stop-row" data-i="${i}">
+      <span class="drag-handle" title="Drag to reorder" aria-hidden="true">⋮⋮</span>
       <span class="n">${i+1}</span>
       <span class="name">${escapeHtml(s.name)}${s.pinOrder!=null?' <span class="pin-flag">📌</span>':''}${s.address ? `<span class="addr">${escapeHtml(s.address)}</span>` : ''}</span>
+      <span class="eta" data-i="${i}"></span>
       <button class="mini-btn" onclick="movePendingStop(${i},-1)" ${i===0?'disabled':''} title="Move earlier">↑</button>
       <button class="mini-btn" onclick="movePendingStop(${i},1)" ${i===pendingOrder.length-1?'disabled':''} title="Move later">↓</button>
       <button class="mini-btn rm-mini" onclick="removePendingStop(${i})" title="Drop this stop">✕</button>
     </div>`).join('');
 
-  document.getElementById('editable-order').innerHTML = startRow + stopRows;
+  document.getElementById('editable-order').innerHTML = startRow + stopRows + '<div class="route-total" id="route-total"></div>';
 
   // Any manual reorder invalidates the previously generated map link until re-confirmed.
   document.getElementById('legs-container').innerHTML = '';
@@ -1429,6 +1489,7 @@ function renderEditableOrder(fit=false){
   clearShareArea();
 
   drawRoutePolyline(fit);
+  updateLegTimes();
   syncMapMarkers(fit);
 }
 
@@ -1440,12 +1501,18 @@ function movePendingStop(i, dir){
 }
 
 function removePendingStop(i){
-  pendingOrder.splice(i,1);
+  const [removed] = pendingOrder.splice(i,1);
+  if(removed){
+    // Uncheck it in the place list too, so re-optimizing doesn't bring it back.
+    const places = loadPlaces();
+    const p = places.find(x=>x.id===removed.id);
+    if(p){ p.checked = false; p.pinOrder = null; savePlaces(places); savePinsToSession(places); renderPlaceList(); }
+  }
   renderEditableOrder();
 }
 
 function resetToOptimized(){
-  pendingOrder = lastComputedOrder.slice();
+  pendingOrder = lastComputedOrder.filter(p=>p.checked); // skip stops dropped since the last optimize
   renderEditableOrder();
 }
 
@@ -1733,6 +1800,48 @@ function confirmRoute(){
 
   legsContainer.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
+/* ---------- Drag to reorder (pointer events: works with mouse and touch) ---------- */
+(function initStopDrag(){
+  const list = document.getElementById('editable-order');
+  let drag = null;
+  const rows = ()=>[...list.querySelectorAll('.stop-row[data-i]')];
+  list.addEventListener('pointerdown', e=>{
+    const handle = e.target.closest('.drag-handle');
+    if(!handle) return;
+    const row = handle.closest('.stop-row');
+    const i = Number(row.dataset.i);
+    drag = {from:i, to:i};
+    handle.setPointerCapture(e.pointerId);
+    row.classList.add('dragging');
+    e.preventDefault();
+  });
+  list.addEventListener('pointermove', e=>{
+    if(!drag) return;
+    const all = rows();
+    if(e.clientY < 70) window.scrollBy(0,-12);
+    else if(e.clientY > window.innerHeight-70) window.scrollBy(0,12);
+    let target = all.find(r=>{ const b=r.getBoundingClientRect(); return e.clientY>=b.top && e.clientY<=b.bottom; });
+    if(!target) target = e.clientY < all[0].getBoundingClientRect().top ? all[0] : all[all.length-1];
+    drag.to = Number(target.dataset.i);
+    all.forEach(r=>r.classList.remove('drop-before','drop-after'));
+    if(drag.to !== drag.from) target.classList.add(drag.to < drag.from ? 'drop-before' : 'drop-after');
+  });
+  function finish(commit){
+    if(!drag) return;
+    const {from, to} = drag;
+    drag = null;
+    if(commit && from!==to){
+      const [moved] = pendingOrder.splice(from,1);
+      pendingOrder.splice(to,0,moved);
+      renderEditableOrder();
+    } else {
+      rows().forEach(r=>r.classList.remove('dragging','drop-before','drop-after'));
+    }
+  }
+  list.addEventListener('pointerup', ()=>finish(true));
+  list.addEventListener('pointercancel', ()=>finish(false));
+})();
+
 /* ---------- Init ---------- */
 function applyThemeButtonLabel(){
   const isDark = document.documentElement.getAttribute('data-theme')==='dark';
@@ -1755,6 +1864,7 @@ function toggleTheme(){
 applyThemeButtonLabel();
 loadSharedRouteFromHash();
 restoreLocal();
+applySessionPins();   // pins survive a refresh (sessionStorage) but not a closed tab
 restoreApiKey();
 renderPlaceList();
 renderSavedStarts();
