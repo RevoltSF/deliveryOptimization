@@ -1878,6 +1878,8 @@ function confirmRoute(){
     drag = {row, from:i, to:i, startY:e.pageY, dy:0};
     handle.setPointerCapture(e.pointerId);
     row.classList.add('dragging');   // lifts the card out of the list
+    row.style.transform = 'scale(1.03)';
+    if(navigator.vibrate) navigator.vibrate(12);
     e.preventDefault();
   });
   list.addEventListener('pointermove', e=>{
@@ -1885,7 +1887,7 @@ function confirmRoute(){
     if(e.clientY < 70) window.scrollBy(0,-12);
     else if(e.clientY > window.innerHeight-70) window.scrollBy(0,12);
     drag.dy = e.pageY - drag.startY;
-    drag.row.style.transform = `translateY(${drag.dy}px) scale(1.02)`;  // card follows the pointer
+    drag.row.style.transform = `translateY(${drag.dy}px) scale(1.03)`;  // card follows the pointer
     const all = rows();
     // hit-test against each row's resting position (the lifted row is offset by dy)
     const span = r=>{ const b=r.getBoundingClientRect(); const off = r===drag.row ? drag.dy : 0; return {top:b.top-off, bottom:b.bottom-off}; };
@@ -1908,6 +1910,8 @@ function confirmRoute(){
       rows().forEach(r=>r.classList.remove('dragging','drop-before','drop-after'));
     }
   }
+  // Long-press on a touch screen opens the context menu and cancels the drag; block it on the handle.
+  list.addEventListener('contextmenu', e=>{ if(e.target.closest('.drag-handle')) e.preventDefault(); });
   list.addEventListener('pointerup', ()=>finish(true));
   list.addEventListener('pointercancel', ()=>finish(false));
 })();
