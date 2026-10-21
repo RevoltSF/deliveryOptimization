@@ -536,8 +536,7 @@ function setPinOrder(id, value){
     n = Math.min(Math.max(n, 1), max);
     p.pinOrder = n;
   }
-  appState.places = places; // pins are session-only — not written to the persisted local cache
-  savePinsToSession(places);
+  savePlaces(places); // persist pins to localStorage — cleared only by "Clear selection"
   renderPlaceList(); // re-render so the input reflects any clamping, and so other rows' max stays current
 }
 
@@ -549,9 +548,15 @@ function savePinsToSession(places){
   sessionStorage.setItem(SS_PINS, JSON.stringify(pins));
 }
 function applySessionPins(){
+  // Migrate any pins that were saved in the old sessionStorage scheme to localStorage.
+  // If sessionStorage is empty (normal case after the fix), do nothing — restoreLocal()
+  // already loaded pin orders from localStorage correctly.
   let pins = {};
   try{ pins = JSON.parse(sessionStorage.getItem(SS_PINS) || '{}'); }catch(e){ pins = {}; }
-  appState.places.forEach(p=>{ p.pinOrder = pins[p.id] ?? null; });
+  if(Object.keys(pins).length === 0) return;
+  appState.places.forEach(p=>{ if(pins[p.id] != null) p.pinOrder = pins[p.id]; });
+  savePlaces(appState.places); // migrate once into localStorage
+  sessionStorage.removeItem(SS_PINS); // then clean up the old entry
 }
 
 // Re-geocodes a single place object in place. Returns {changed, error}. Does not save/render —
@@ -866,7 +871,7 @@ function syncMapMarkers(fit=false){
     any = true;
   }
 
-  if(any && fit) gMap.fitBounds(bounds, 60);
+  if(any && fit) gMap.fitBounds(bounds, 15);
 }
 
 /* ---------- Route polyline (actual driving roads) ----------
@@ -980,7 +985,7 @@ function redrawAllLegPolylines(fit=false){
     routePolylines.push(poly);
     path.forEach(pt=>b.extend(pt));
   });
-  if(fit && !b.isEmpty() && gMap) gMap.fitBounds(b, 60);
+  if(fit && !b.isEmpty() && gMap) gMap.fitBounds(b, 15);
   updateLegTimes();
 }
 
