@@ -887,6 +887,27 @@ function clearRoutePolyline(){
 // One entry per stop-to-stop hop: {points: [from,to] (each with lat/lng), result (raw DirectionsResult or null), fallback (bool)}
 let legRouteChoices = [];
 
+// ---------- Route-leg cache ----------
+// Directions calls with a departure time are billed at the pricier traffic-aware rate,
+// and the route is redrawn on every reorder/drop. A drag only changes 2-3 legs, so we
+// remember each leg's result and only request the ones we haven't seen.
+// Key = rounded origin/destination + departure time bucket, so traffic-aware results
+// expire on their own after LEG_CACHE_BUCKET_MS. Only successes and definite
+// "no route" answers are cached; quota/network errors are retried next time.
+const LEG_CACHE_BUCKET_MS = 5 * 60 * 1000;
+const LEG_CACHE_MAX = 300;
+const legCache = new Map(); // key -> DirectionsResult, or null for "no drivable route"
+function legCacheKey(a, b, depDate){
+  const r = n => n.toFixed(5);
+  const bucket = Math.floor(depDate.getTime() / LEG_CACHE_BUCKET_MS);
+  return `${r(a.lat)},${r(a.lng)}>${r(b.lat)},${r(b.lng)}@${bucket}`;
+}
+function legCacheSet(key, value){
+  legCache.delete(key); // re-insert so the newest entry is last
+  legCache.set(key, value);
+  if(legCache.size > LEG_CACHE_MAX) legCache.delete(legCache.keys().next().value); // evict oldest
+}
+
 async function drawRoutePolyline(fit=false){
   const myToken = ++routeDrawToken;
   clearRoutePolyline();
@@ -913,6 +934,7 @@ async function drawRoutePolyline(fit=false){
   redrawAllLegPolylines(fit);
 
   const svc = new google.maps.DirectionsService();
+  const cacheDep = getDepartureDate(); // one reference time for every leg's cache key in this draw
   let anyRoadFailure = false;
 
   // Fetch hops with limited concurrency instead of one at a time: much faster
@@ -931,21 +953,32 @@ async function drawRoutePolyline(fit=false){
       const destination = {lat:segPoints[1].lat, lng:segPoints[1].lng};
       let result = null;
       let isFallback = false;
-      try{
-        result = await new Promise((resolve,reject)=>{
-          svc.route({
-            origin, destination,
-            travelMode: google.maps.TravelMode.DRIVING,
-            drivingOptions: {departureTime: getDepartureDate(), trafficModel: google.maps.TrafficModel.BEST_GUESS}
-          }, (res,status)=>{
-            if(status==='OK') resolve(res); else reject(status);
+      const cacheKey = legCacheKey(origin, destination, cacheDep);
+      if(legCache.has(cacheKey)){
+        result = legCache.get(cacheKey);   // null = cached "no drivable route"
+        isFallback = (result === null);
+        if(isFallback) anyRoadFailure = true;
+      } else {
+        try{
+          result = await new Promise((resolve,reject)=>{
+            svc.route({
+              origin, destination,
+              travelMode: google.maps.TravelMode.DRIVING,
+              drivingOptions: {departureTime: getDepartureDate(), trafficModel: google.maps.TrafficModel.BEST_GUESS}
+            }, (res,status)=>{
+              if(status==='OK') resolve(res); else reject(status);
+            });
           });
-        });
-      }catch(err){
-        // No drivable route for this hop (e.g. overseas stop) — keep the
-        // straight-line placeholder for just that hop rather than dropping it.
-        anyRoadFailure = true;
-        isFallback = true;
+          legCacheSet(cacheKey, result); // cache even if a newer draw superseded this one: it's already paid for
+        }catch(err){
+          // No drivable route for this hop (e.g. overseas stop) — keep the
+          // straight-line placeholder for just that hop rather than dropping it.
+          // Only definite "no route" answers are cached; quota/key/network errors are not.
+          if(err==='ZERO_RESULTS' || err==='NOT_FOUND') legCacheSet(cacheKey, null);
+          anyRoadFailure = true;
+          isFallback = true;
+          result = null;
+        }
       }
       if(myToken !== routeDrawToken) return;
       choices[i] = {points: segPoints, result, fallback: isFallback};
